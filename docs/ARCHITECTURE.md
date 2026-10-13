@@ -36,6 +36,17 @@ The heart's correctness *is* its mutual consistency. For any `TSR` and pose:
   and "the representative we return is in bounds" are different claims. Violating it made
   `to_xyzrpy` contradict the same region's `is_valid` for a quarter of contained poses
   (#171).
+- For a pose the region does **not** contain, `distance(T)[0]` is the *minimum*
+  displacement over every equivalent RPY representative, not merely over one wrapping of
+  them. RPY is periodic and double-covering, so each angle has infinitely many
+  representatives and a rotation has nine equivalent triples; the measured one must be the
+  nearest to the bound interval. Wrapping each angle into `[lower, lower + 2π)` instead
+  sent an angle just *below* a bound narrower than a full turn almost a full turn above the
+  upper bound, which overstated 41% of the conformance corpus's recorded distances — by up
+  to 10× — and reported a pose 0.006 rad outside a zero-width bound as about π away (#186).
+  Wrap relative to the interval **centre**: the distance to `[lo, hi]` is
+  `max(0, |x − c| − w/2)`, monotone in `|x − c|`, so the representative nearest the centre
+  is the one nearest the interval.
 - The RPY ↔ rotation ↔ transform conversions round-trip (including near gimbal
   lock — see `docs/REVIEW.md` C1).
 

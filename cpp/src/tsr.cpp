@@ -133,7 +133,17 @@ std::pair<XyzRpy, XyzRpy> TSR::displacement(const Transform& T) const {
   double best_norm = std::numeric_limits<double>::infinity();
   for (const Rpy& cand : candidates) {
     XyzRpy dw{xyz[0], xyz[1], xyz[2], 0.0, 0.0, 0.0};
-    for (int k = 0; k < 3; ++k) dw[static_cast<std::size_t>(3 + k)] = wrap_to_interval(cand[static_cast<std::size_t>(k)], cont_.lo(3 + k));
+    // Wrap each angle to the representative NEAREST the bound interval, not into
+    // [lo, lo + 2pi) (#186). An angle slightly below a bound narrower than a full turn is a
+    // full turn away from `lo`, so wrapping from the lower edge sent it to almost lo + 2pi --
+    // far above the upper bound -- and no equivalent-RPY candidate recovered the true small
+    // displacement. The interval centre is the right origin because the distance to [lo, hi]
+    // is max(0, |x - c| - w/2): monotone in |x - c|, so the representative nearest the centre
+    // is the one nearest the interval.
+    for (int k = 0; k < 3; ++k) {
+      const double centre = (cont_.lo(3 + k) + cont_.hi(3 + k)) / 2.0;
+      dw[static_cast<std::size_t>(3 + k)] = wrap_to_interval(cand[static_cast<std::size_t>(k)], centre - kPi);
+    }
     XyzRpy dx{};
     for (int i = 0; i < 6; ++i) {
       const double v = dw[static_cast<std::size_t>(i)];

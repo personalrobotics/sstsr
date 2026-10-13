@@ -474,9 +474,21 @@ class TSR:
         rpy_candidates.append(numpy.array([r - pi, -pi - p, y + pi]))
         rpy_candidates.append(numpy.array([r - pi, -pi - p, y - pi]))
 
+        # Wrap each angle to the representative NEAREST the bound interval, not into
+        # [lower, lower + 2*pi) (#186). An angle slightly *below* a bound narrower than a
+        # full turn is a full turn away from `lower`, so wrapping from the lower edge sent
+        # it to almost `lower + 2*pi` -- far above the upper bound -- and no equivalent-RPY
+        # candidate could recover the true small displacement. A pose 0.006 rad under a
+        # zero-width bound measured about pi instead of 0.006.
+        #
+        # The interval centre is the right origin because the distance to [lo, hi] is
+        # max(0, |x - c| - w/2) for centre c and width w: it is monotone in |x - c|, so the
+        # representative closest to the centre is the one closest to the interval, and
+        # wrap_to_interval(x, c - pi) returns exactly that one. For a full turn every
+        # representative is inside and the choice does not matter.
+        rpy_centre = (self._Bw_cont[3:6, 0] + self._Bw_cont[3:6, 1]) / 2.0
         for rpy_cand in rpy_candidates:
-            # Wrap RPY to bounds interval for comparison
-            rpy_wrapped = wrap_to_interval(rpy_cand, lower=self._Bw_cont[3:6, 0])
+            rpy_wrapped = wrap_to_interval(rpy_cand, lower=rpy_centre - pi)
             dw_cand = numpy.hstack((xyz, rpy_wrapped))
 
             # Equation 8: Compute displacement to bounds
