@@ -581,3 +581,114 @@ class ConstructionContractTest(TestCase):
         pose[:3, :3] = TSR(Bw=numpy.zeros((6, 2))).to_transform(numpy.zeros(6))[:3, :3]
         for template in templates:
             template.instantiate(pose)  # must not raise
+
+
+class DistanceWrapsToTheNearestRepresentative(TestCase):
+    """`distance` reports the true minimum displacement over equivalent RPY (#186).
+
+    RPY is periodic and double-covering, so a rotation has many representatives. The
+    displacement formula has to measure the one nearest the bound interval. It used to wrap
+    each angle into ``[lower, lower + 2*pi)``, which for an angle slightly *below* a bound
+    narrower than a full turn lands almost a full turn *above* the upper bound -- so a pose
+    0.006 rad outside a zero-width bound measured about pi instead of 0.006.
+
+    Found downstream in personalrobotics/ssrobot#129, measuring where Geodude's hand ended
+    after executing a planned TSR goal.
+    """
+
+    def test_a_pose_just_under_a_rotation_bound_is_millimetres_away(self):
+        """The exact case from the issue."""
+        Bw = numpy.array([[0, 0], [0, 0], [-0.02, 0.02], [0, 0], [0, 0], [-pi, pi]])
+        tsr = TSR(numpy.eye(4), numpy.eye(4), Bw)
+        pose = TSR.xyzrpy_to_trans(numpy.array([0.0011, -0.003, 0.0078, -0.006, -0.0036, -0.2026]))
+
+        dist, _ = tsr.distance(pose)
+        # the true displacement is the translation plus the two small rotation excesses
+        expected = numpy.linalg.norm([0.0011, -0.003, 0.0, -0.006, -0.0036, 0.0])
+        self.assertAlmostEqual(dist, expected, places=9)
+        self.assertLess(dist, 0.01)  # not ~4.44, which is what wrapping from `lower` gave
+
+    def test_two_zero_width_rotation_bounds_beside_a_free_one(self):
+        """The second reproduction, from a CI run of personalrobotics/ssrobot#131.
+
+        ADA's articutool fork tip is constrained with roll and pitch pinned and yaw free.
+        The articutool's joints sit outside the planned arm group, so they settle after
+        execution and push the tip just under the roll bound -- measured 4.44 rather than the
+        few millimetres and 0.015 rad it actually was.
+
+        Distinct from the case above: two pinned rotation bounds beside a free one, which is
+        the shape a tool-tip constraint takes, and the pinned axes must behave alike.
+        """
+        Bw = numpy.array([[0, 0], [0, 0], [0, 0], [0, 0], [0, 0], [-pi, pi]])
+        tsr = TSR(numpy.eye(4), numpy.eye(4), Bw)
+        translation = [0.002, -0.0025, 0.0005]
+
+        for axis, name in ((3, "roll"), (4, "pitch")):
+            coords = numpy.array(translation + [0.0, 0.0, 0.4])
+            coords[axis] = -0.015  # just UNDER the pinned bound, the side that was broken
+            dist, _ = tsr.distance(TSR.xyzrpy_to_trans(coords))
+            expected = numpy.linalg.norm(translation + [0.015])
+            self.assertAlmostEqual(dist, expected, places=9, msg=f"{name} side")
+            self.assertLess(dist, 0.02, msg=f"{name} side measured {dist}, not ~pi")
+
+    def test_just_below_and_just_above_a_zero_width_bound_agree(self):
+        """A zero-width bound is the sharpest case: the two sides must be symmetric.
+
+        Nothing about being on the low side of a bound makes a pose further away, so equal
+        offsets either way must measure equally. Wrapping from the lower edge broke exactly
+        this symmetry, and only on the low side.
+        """
+        Bw = numpy.array([[0, 0], [0, 0], [0, 0], [0, 0], [0, 0], [0, 0]])
+        tsr = TSR(numpy.eye(4), numpy.eye(4), Bw)
+        for offset in (0.5, 0.05, 0.006, 0.002):
+            below, _ = tsr.distance(TSR.xyzrpy_to_trans(numpy.array([0, 0, 0, -offset, 0, 0])))
+            above, _ = tsr.distance(TSR.xyzrpy_to_trans(numpy.array([0, 0, 0, offset, 0, 0])))
+            self.assertAlmostEqual(below, above, places=9, msg=f"asymmetric at offset {offset}")
+            self.assertAlmostEqual(below, offset, places=9)
+
+    def test_distance_is_the_minimum_over_every_representative(self):
+        """The property the regression violated, checked against an independent oracle.
+
+        The oracle enumerates the nine equivalent RPY triples and, for each, every ``2*pi``
+        shift within a few turns, then takes the least displacement. It shares no wrapping
+        code with the implementation -- that is the part that was wrong -- so agreement means
+        the implementation really found the minimum rather than merely a candidate.
+        """
+        rng = numpy.random.default_rng(186)
+
+        def oracle(tsr, pose):
+            local = numpy.linalg.inv(tsr.T0_w) @ pose @ numpy.linalg.inv(tsr.Tw_e)
+            xyz = local[:3, 3]
+            r, p, y = TSR.rot_to_rpy(local[:3, :3])
+            triples = [(r, p, y)]
+            for dr in (pi, -pi):
+                for dp in (pi, -pi):
+                    for dy in (pi, -pi):
+                        triples.append((r + dr, dp - p, y + dy))
+            lo, hi = tsr._Bw_cont[:, 0], tsr._Bw_cont[:, 1]
+            best = numpy.inf
+            for triple in triples:
+                for shifts in [
+                    (a, b, c) for a in (-2, -1, 0, 1, 2) for b in (-2, -1, 0, 1, 2) for c in (-2, -1, 0, 1, 2)
+                ]:
+                    angles = numpy.array(triple) + 2 * pi * numpy.array(shifts)
+                    dw = numpy.hstack((xyz, angles))
+                    dx = numpy.where(dw < lo, dw - lo, numpy.where(dw > hi, dw - hi, 0.0))
+                    best = min(best, float(numpy.linalg.norm(dx)))
+            return best
+
+        for _ in range(25):
+            widths = rng.choice([0.0, 0.2, 1.0, 2 * pi], 3)
+            lows = rng.uniform(-pi, pi, 3)
+            Bw = numpy.vstack(
+                [
+                    numpy.column_stack([rng.uniform(-0.05, 0, 3), rng.uniform(0, 0.05, 3)]),
+                    numpy.column_stack([lows, lows + widths]),
+                ]
+            )
+            tsr = TSR(numpy.eye(4), numpy.eye(4), Bw)
+            pose = TSR.xyzrpy_to_trans(numpy.concatenate([rng.uniform(-0.1, 0.1, 3), rng.uniform(-pi, pi, 3)]))
+            if tsr.contains(pose):
+                continue  # distance short-circuits to exactly 0 there
+            dist, _ = tsr.distance(pose)
+            self.assertAlmostEqual(dist, oracle(tsr, pose), places=7)

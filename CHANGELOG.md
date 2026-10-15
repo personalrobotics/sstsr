@@ -4,6 +4,37 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- **`TSR.distance` no longer overstates how far a pose just under a rotation bound is** (#186).
+  The displacement formula wrapped each angle into `[lower, lower + 2π)` before measuring it
+  against the bounds. An angle slightly *below* a bound narrower than a full turn is a full
+  turn away from `lower`, so it landed at almost `lower + 2π` — far above the upper bound —
+  and none of the nine equivalent-RPY candidates could recover the true small displacement. A
+  pose 3 mm and 0.006 rad outside a region measured **4.441** (about `π√2`) instead of 0.0077.
+
+  Angles are now wrapped relative to the interval **centre**, which is the representative
+  nearest the bounds: the distance to `[lo, hi]` is `max(0, |x − c| − w/2)`, monotone in
+  `|x − c|`, so nearest-to-centre is nearest-to-interval. Verified to never *increase* a
+  reported distance — over 20 000 random angle/interval draws, 72% improved and none
+  worsened.
+
+  This was not an edge case. It overstated **41% of the conformance corpus's recorded
+  distances**, by up to 10× (`5.661` → `0.549`). `contains` is unaffected and its verdicts are
+  unchanged everywhere: it wraps with its own `EPSILON`-shifted origin, and `distance`
+  short-circuits to exactly `0.0` for a contained pose, so the `contains ⇔ distance == 0`
+  invariant still holds.
+
+  Consumers using `distance` for membership, projection or validation saw a pose just outside
+  a narrow rotation bound as about π away instead of millimetres — in a planner that makes
+  projection fail where it should succeed, and in a checker it refuses a valid near-boundary
+  state. Found downstream in `personalrobotics/ssrobot#129`, measuring where Geodude's hand
+  ended after executing a planned TSR goal.
+
+  The rule is now stated in `docs/ARCHITECTURE.md`'s Layer 0 consistency contract, the C++
+  core follows it, and the corpus was regenerated — 66 of 162 probes moved.
+
 ## [3.4.1] — 2026-10
 
 Metadata only; no code changes.
