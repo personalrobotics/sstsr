@@ -4,7 +4,21 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [3.5.0] — 2026-10
+
+`TSR.distance` was measuring from the wrong rotation representative, and reporting poses just
+outside a narrow rotation bound as about π away instead of millimetres.
+
+Pin `sstsr>=3.5` if you use `distance` or `closest_transform` for membership, projection or
+validation. The numbers change: they are smaller and correct, never larger, and a `contains`
+verdict never moves — but 41% of the conformance corpus's recorded distances were overstated,
+some by 10×, so a threshold tuned against the old values will behave differently. That is why
+this is a minor release rather than a patch.
+
+Found twice in the field, from opposite directions: measuring where Geodude's hand ended after
+executing a planned TSR goal (`ssrobot#129`), and a CI run where ADA's articutool joints, which
+sit outside the planned arm group, settled after execution and pushed the fork tip just under
+its roll bound (`ssrobot#131`). Both are now regression tests.
 
 ### Fixed
 - **`TSR.distance` no longer overstates how far a pose just under a rotation bound is** (#186).
