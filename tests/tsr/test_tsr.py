@@ -608,6 +608,29 @@ class DistanceWrapsToTheNearestRepresentative(TestCase):
         self.assertAlmostEqual(dist, expected, places=9)
         self.assertLess(dist, 0.01)  # not ~4.44, which is what wrapping from `lower` gave
 
+    def test_two_zero_width_rotation_bounds_beside_a_free_one(self):
+        """The second reproduction, from a CI run of personalrobotics/ssrobot#131.
+
+        ADA's articutool fork tip is constrained with roll and pitch pinned and yaw free.
+        The articutool's joints sit outside the planned arm group, so they settle after
+        execution and push the tip just under the roll bound -- measured 4.44 rather than the
+        few millimetres and 0.015 rad it actually was.
+
+        Distinct from the case above: two pinned rotation bounds beside a free one, which is
+        the shape a tool-tip constraint takes, and the pinned axes must behave alike.
+        """
+        Bw = numpy.array([[0, 0], [0, 0], [0, 0], [0, 0], [0, 0], [-pi, pi]])
+        tsr = TSR(numpy.eye(4), numpy.eye(4), Bw)
+        translation = [0.002, -0.0025, 0.0005]
+
+        for axis, name in ((3, "roll"), (4, "pitch")):
+            coords = numpy.array(translation + [0.0, 0.0, 0.4])
+            coords[axis] = -0.015  # just UNDER the pinned bound, the side that was broken
+            dist, _ = tsr.distance(TSR.xyzrpy_to_trans(coords))
+            expected = numpy.linalg.norm(translation + [0.015])
+            self.assertAlmostEqual(dist, expected, places=9, msg=f"{name} side")
+            self.assertLess(dist, 0.02, msg=f"{name} side measured {dist}, not ~pi")
+
     def test_just_below_and_just_above_a_zero_width_bound_agree(self):
         """A zero-width bound is the sharpest case: the two sides must be symmetric.
 
