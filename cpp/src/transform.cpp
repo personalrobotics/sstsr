@@ -9,7 +9,7 @@ namespace sstsr {
 
 namespace {
 constexpr double kPi = std::numbers::pi;
-constexpr double kGimbalEpsilon = 1e-9;  // core/tsr.py's _GIMBAL_EPSILON
+constexpr double kGimbalEpsilon = 1e-14;  // core/tsr.py's _GIMBAL_EPSILON
 }  // namespace
 
 Transform Transform::identity() {

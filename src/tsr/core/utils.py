@@ -4,7 +4,18 @@
 import numpy as np
 from numpy import pi
 
-EPSILON = 0.001
+#: Default satisfaction tolerance of a chain's inverse solve: the geodesic residual
+#: below which :meth:`TSRChain.solve` reports ``"satisfied"``. A solver tolerance,
+#: not part of any region's geometry -- :meth:`TSR.contains` does not use it (#190).
+CHAIN_TOLERANCE = 0.001
+
+#: Deprecated alias of :data:`CHAIN_TOLERANCE`. Until #190 it was also the slack
+#: :meth:`TSR.contains` granted on every side of every bound; it no longer is.
+EPSILON = CHAIN_TOLERANCE
+
+#: Round-off tolerance for an angle [rad], the contract's angular counterpart of
+#: :func:`length_atol` (docs/ARCHITECTURE.md). Membership absorbs round-off with it.
+ANGLE_ATOL = 1e-6
 
 
 def length_atol(scale: float) -> float:

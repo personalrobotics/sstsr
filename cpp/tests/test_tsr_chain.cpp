@@ -245,11 +245,11 @@ TEST(a_validating_witness_takes_the_exact_warm_path_and_comes_back_verbatim) {
   CHECK(chain.contains(s.pose, s.coordinates));
 }
 
-TEST(an_out_of_chart_guess_within_the_containment_slack_is_still_accepted_verbatim) {
-  // is_valid grants kEpsilon of slack on each side of every bound, while the chart clips. So a
-  // guess just past a zero-width bound validates and is returned as given -- outside the
-  // chart. The property "coordinates lie in the chart" therefore cannot apply to this path,
-  // and this case is why.
+TEST(an_out_of_chart_guess_within_round_off_is_still_accepted_verbatim) {
+  // is_valid absorbs round-off (kAngleAtol) on each side of every bound, while the chart clips.
+  // So a guess a round-off past a zero-width bound validates and is returned as given --
+  // outside the chart. The property "coordinates lie in the chart" therefore cannot apply to
+  // this path, and this case is why. Until #190 the band was 1e-3 wide; now it is round-off.
   const TSRChain chain({
       TSR(frame(1.0, 0, 0.8), frame(0.6, 0, 0), bounds({{{0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}}})),
       TSR(Transform::identity(), Transform::identity(),
@@ -258,7 +258,7 @@ TEST(an_out_of_chart_guess_within_the_containment_slack_is_still_accepted_verbat
   Rng rng(3);
   const ChainSample s = chain.sample_with_witness(rng);
   ChainCoords guess = s.coordinates;
-  guess[0][5] += 9e-4;  // inside kEpsilon, outside the [0, 0] chart row
+  guess[0][5] += 5e-7;  // inside kAngleAtol, outside the [0, 0] chart row
 
   SolveOptions opt{};
   opt.initial_guess = guess;
@@ -304,18 +304,16 @@ TEST(a_single_link_chain_uses_the_closed_form_and_never_the_optimiser) {
   CHECK(!chain.contains(frame(3.0, -2.0, 1.0, 0.4, 0.2, -0.8)));
 }
 
-TEST(a_single_link_may_report_satisfied_with_a_residual_at_or_above_the_tolerance) {
-  // Not a defect to fix in the port: contains grants kEpsilon of slack per coordinate while the
-  // forward map clips to the chart, so the closed-form path can report kSatisfied with a
-  // residual that is not below tolerance. The Python does exactly this (measured up to 2.4e-3
-  // against a 1e-3 tolerance), the corpus pins it, and "correcting" it here would make the two
-  // implementations disagree. It is why the "satisfied implies residual < tolerance" property
-  // is scoped to chains of two or more links.
+TEST(a_single_link_refuses_a_pose_just_outside_its_bounds) {
+  // Until #190 contains granted 1e-3 of slack per coordinate, so the closed-form path reported
+  // kSatisfied here with a residual at or above the 1e-3 tolerance. Membership is now exact up
+  // to round-off: a pose 2e-4 past a bound is not contained, and its distance is that 2e-4.
   const TSRChain chain({TSR(frame(0, 0, 0), Transform::identity(), bounds({{{0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}}}))});
-  const Transform just_outside = frame(1e-3, 1e-3, 1e-3);
+  const Transform just_outside = frame(2e-4, 0, 0);
   const ChainSolveResult result = chain.solve(just_outside);
-  CHECK(result.status == ChainStatus::kSatisfied);
-  CHECK(result.residual >= kEpsilon);
+  CHECK(result.status == ChainStatus::kNotFound);
+  CHECK_NEAR(result.residual, 2e-4, 1e-12);
+  CHECK(!chain.tsrs()[0].contains(just_outside));
 }
 
 TEST(a_chain_whose_only_freedom_is_an_outer_interval_is_not_mistaken_for_all_fixed) {
@@ -462,7 +460,7 @@ TEST(the_cold_inverses_residual_is_the_geodesic_at_the_coordinates_it_returns) {
       const double measured = geodesic_distance(chain.to_transform(result.coordinates), T);
       CHECK_NEAR(result.residual, measured, 1e-12);
       // And a satisfied verdict means that residual really is inside the tolerance.
-      if (result.status == ChainStatus::kSatisfied) CHECK(result.residual < kEpsilon);
+      if (result.status == ChainStatus::kSatisfied) CHECK(result.residual < kChainTolerance);
     }
   }
 }
@@ -720,7 +718,7 @@ TEST(the_pose_the_pythons_cold_solve_cannot_find_is_found_here) {
   std::printf("        issue #85 counterexample: %s, residual %.3e, %d evaluations over %d start(s)\n",
               to_string(cold.status), cold.residual, cold.nfev, cold.starts);
   CHECK(cold.status == ChainStatus::kSatisfied);
-  CHECK(cold.residual < kEpsilon);
+  CHECK(cold.residual < kChainTolerance);
 }
 
 TEST(the_cold_inverse_finds_a_witness_for_a_pose_that_provably_has_one) {

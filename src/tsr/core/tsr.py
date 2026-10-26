@@ -7,7 +7,7 @@ import numpy
 import numpy.random
 from numpy import pi
 
-from .utils import EPSILON, geodesic_distance, wrap_to_interval
+from .utils import ANGLE_ATOL, geodesic_distance, length_atol, wrap_to_interval
 
 NANBW = numpy.ones(6) * float("nan")
 
@@ -82,7 +82,12 @@ def _check_bounds(value) -> numpy.ndarray:
 # general formula stays accurate right up to it; snapping pitch to +/-pi/2 too
 # early (the old EPSILON=1e-3 threshold) discarded up to ~0.04 rad of rotation
 # and made contains() reject poses that sample() produced. See docs/REVIEW.md C1.
-_GIMBAL_EPSILON = 1e-9
+#
+# 1e-9 still snapped up to ~4.5e-5 rad (cos(pitch) < sqrt(2e-9)), which the old
+# 1e-3 containment slack hid (#190). Snapping costs about cos(pitch) * pi of
+# rotation and the general formula about eps / cos(pitch); at 1e-14 the band is
+# cos(pitch) < 1.4e-7 and both stay well under ANGLE_ATOL.
+_GIMBAL_EPSILON = 1e-14
 
 
 class TSR:
@@ -238,23 +243,26 @@ class TSR:
         return trans
 
     @staticmethod
-    def xyz_within_bounds(xyz, Bw):
+    def xyz_within_bounds(xyz, Bw, atol=None):
         """
         Checks whether an xyz value is within a given xyz bounds.
         Main issue: dealing with roundoff issues for zero bounds
         @param xyz a (3,) xyz value
         @param Bw bounds on xyz
+        @param atol round-off tolerance; defaults to length_atol(|xyz|)
         @return check a (3,) vector of True if within and False if outside
         """
+        if atol is None:
+            atol = length_atol(numpy.sqrt(numpy.nansum(numpy.square(numpy.asarray(xyz, dtype=float)))))
         # Check bounds condition on XYZ component.
         xyzcheck = []
         for i, x in enumerate(xyz):
             x_val = x.item() if hasattr(x, "item") else float(x)  # Convert to scalar
-            xyzcheck.append(((x_val + EPSILON) >= Bw[i, 0]) and ((x_val - EPSILON) <= Bw[i, 1]))
+            xyzcheck.append(((x_val + atol) >= Bw[i, 0]) and ((x_val - atol) <= Bw[i, 1]))
         return xyzcheck
 
     @staticmethod
-    def rpy_within_bounds(rpy, Bw):
+    def rpy_within_bounds(rpy, Bw, atol=ANGLE_ATOL):
         """
         Checks whether an rpy value is within a given rpy bounds.
         Assumes all values in the bounds are [-pi, pi]
@@ -262,23 +270,24 @@ class TSR:
         Wraparound for rpy.
         @param rpy a (3,) rpy value
         @param Bw bounds on rpy
+        @param atol round-off tolerance [rad]
         @return check a (3,) vector of True if within and False if outside
         """
-        # Unwrap rpy to Bw_cont. Shift the wrap origin down by EPSILON so a value
+        # Unwrap rpy to Bw_cont. Shift the wrap origin down by atol so a value
         # sitting within tolerance *below* the lower bound (e.g. a -1e-9 roundoff
         # against a point bound) stays next to the bound instead of wrapping a full
         # 2*pi up to the top of the interval and failing the check.
-        rpy = wrap_to_interval(rpy, lower=Bw[:3, 0] - EPSILON)
+        rpy = wrap_to_interval(rpy, lower=Bw[:3, 0] - atol)
 
         # Check bounds condition on RPY component.
         rpycheck = [False] * 3
         for i in range(0, 3):
-            if Bw[i, 0] > Bw[i, 1] + EPSILON:
+            if Bw[i, 0] > Bw[i, 1] + atol:
                 # An outer interval
-                rpycheck[i] = ((rpy[i] + EPSILON) >= Bw[i, 0]) or ((rpy[i] - EPSILON) <= Bw[i, 1])
+                rpycheck[i] = ((rpy[i] + atol) >= Bw[i, 0]) or ((rpy[i] - atol) <= Bw[i, 1])
             else:
                 # An inner interval
-                rpycheck[i] = ((rpy[i] + EPSILON) >= Bw[i, 0]) and ((rpy[i] - EPSILON) <= Bw[i, 1])
+                rpycheck[i] = ((rpy[i] + atol) >= Bw[i, 0]) and ((rpy[i] - atol) <= Bw[i, 1])
         return rpycheck
 
     @staticmethod
@@ -390,7 +399,7 @@ class TSR:
         xyz, rpy = xyzrpy[0:3], xyzrpy[3:6]
 
         # Check bounds condition on XYZ component.
-        xyzcheck = TSR.xyz_within_bounds(xyz, Bw_xyz)
+        xyzcheck = TSR.xyz_within_bounds(xyz, Bw_xyz, self._length_atol(xyz))
 
         # Check bounds condition on RPY component.
         rpycheck = TSR.rpy_within_bounds(rpy, Bw_rpy)
@@ -404,9 +413,27 @@ class TSR:
 
         return check
 
+    def _length_atol(self, xyz):
+        """Round-off tolerance for TSR-frame coordinates ``xyz`` [m] (#190).
+
+        The bounds are exact; this only absorbs the round-off of composing a pose with
+        ``T0_w`` and ``Tw_e``, which scales with the lengths in that composition -- not
+        with the region's width. Hence :func:`length_atol` at the sum of those lengths.
+        """
+        scale = (
+            numpy.linalg.norm(self.T0_w[:3, 3])
+            + numpy.linalg.norm(self.Tw_e[:3, 3])
+            + numpy.sqrt(numpy.nansum(numpy.square(numpy.asarray(xyz, dtype=float))))  # NaN: unrequested
+        )
+        return length_atol(scale)
+
     def contains(self, trans):
         """
-        Checks if the TSR contains the transform
+        Checks if the TSR contains the transform: whether its coordinates lie within
+        ``Bw``, up to the round-off of :func:`length_atol` and ``ANGLE_ATOL`` (#190).
+        There is no further slack; a caller deciding acceptance sets its own tolerance
+        on :meth:`distance`.
+
         @param  trans 4x4 transform
         @return True if transform is within TSR bounds, False otherwise
         """
@@ -421,7 +448,7 @@ class TSR:
         xyz, rot = Tw_s_prime[0:3, 3], Tw_s_prime[0:3, 0:3]
 
         # Check bounds condition on XYZ component.
-        xyzcheck = TSR.xyz_within_bounds(xyz, Bw_xyz)
+        xyzcheck = TSR.xyz_within_bounds(xyz, Bw_xyz, self._length_atol(xyz))
         # Check bounds condition on rot component.
         rotcheck, rpy = TSR.rot_within_rpy_bounds(rot, Bw_rpy)
 

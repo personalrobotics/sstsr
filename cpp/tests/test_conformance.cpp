@@ -124,10 +124,10 @@ TEST(corpus_is_the_one_this_build_expects) {
   // this test is the only thing holding the C++ to the Python.
   const testjson::Value& c = corpus();
   const auto& regions = c["regions"].array();
-  CHECK(regions.size() == 9);
+  CHECK(regions.size() == 11);
   std::size_t probes = 0;
   for (const auto& r : regions) probes += r["probes"].array().size();
-  CHECK(probes == 162);
+  CHECK(probes == 282);
 
   // The chain half, counted for the same reason: a missing `chains` key fails loudly at the
   // keyed lookup, but a zero-length array would pass every chain case vacuously.

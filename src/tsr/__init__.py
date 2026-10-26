@@ -28,6 +28,8 @@ The spine: a factory produces recipes; a recipe instantiates to math::
 
 # --- Layer 0: core math -------------------------------------------------------
 from .core import (
+    ANGLE_ATOL,
+    CHAIN_TOLERANCE,
     EPSILON,
     FRAME_ATOL,
     TSR,
@@ -95,6 +97,8 @@ __all__ = [
     "rotation_angle",
     "geodesic_error",
     "geodesic_distance",
+    "ANGLE_ATOL",
+    "CHAIN_TOLERANCE",
     "EPSILON",
     "FRAME_ATOL",
     # template

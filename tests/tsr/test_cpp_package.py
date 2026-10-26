@@ -25,7 +25,7 @@ from pathlib import Path
 import pytest
 
 import tsr
-from tsr import EPSILON, FRAME_ATOL, TSRChain
+from tsr import ANGLE_ATOL, CHAIN_TOLERANCE, FRAME_ATOL, TSRChain
 from tsr.core.utils import geodesic_distance
 
 
@@ -82,8 +82,17 @@ def test_the_frame_tolerance_is_the_same_number_in_both():
     assert _literal(_cpp_source("transform.hpp"), "constexpr double kFrameAtol") == FRAME_ATOL
 
 
-def test_the_containment_slack_is_the_same_number_in_both():
-    assert _literal(_cpp_source("tsr.hpp"), "constexpr double kEpsilon") == EPSILON
+def test_the_membership_round_off_is_the_same_in_both():
+    """``contains`` has no slack beyond round-off (#190), so the round-off tolerances decide
+    every boundary verdict: a drift would split the two implementations exactly there."""
+    source = _cpp_source("tsr.hpp")
+    assert _literal(source, "constexpr double kAngleAtol") == ANGLE_ATOL
+    assert re.search(r"return 1e-9 \+ 1e-6 \* scale;", source), "length_atol drifted from tsr.core.utils"
+    assert "return 1e-9 + 1e-6 * float(scale)" in inspect.getsource(tsr.core.utils.length_atol)
+
+
+def test_the_chain_tolerance_is_the_same_number_in_both():
+    assert _literal(_cpp_source("tsr.hpp"), "constexpr double kChainTolerance") == CHAIN_TOLERANCE
 
 
 def test_the_gimbal_threshold_is_the_same_number_in_both():
@@ -104,15 +113,15 @@ def test_the_default_solve_budget_is_the_same_in_both():
     assert _literal(source, "constexpr int kDefaultMaxNfev") == TSRChain._DEFAULT_MAX_NFEV
 
 
-def test_the_chain_solve_tolerance_is_the_librarys_epsilon_in_both():
-    """Both sides must take the default tolerance from the one containment constant rather than
-    restate it. ``kEpsilon`` is already drift-checked against ``EPSILON`` above, so spelling the
-    C++ default as ``kEpsilon`` keeps a single literal in play instead of a third copy."""
+def test_the_chain_solve_tolerance_is_the_librarys_chain_tolerance_in_both():
+    """Both sides must take the default tolerance from the one named constant rather than
+    restate it. ``kChainTolerance`` is already drift-checked against ``CHAIN_TOLERANCE`` above,
+    so spelling the C++ default as ``kChainTolerance`` keeps a single literal in play."""
     source = _cpp_source("tsr_chain.hpp")
     assert re.search(
-        r"double tolerance\s*=\s*kEpsilon\s*;", source
-    ), "SolveOptions::tolerance should default to kEpsilon, not a restated number"
-    assert inspect.signature(TSRChain.solve).parameters["tolerance"].default == EPSILON
+        r"double tolerance\s*=\s*kChainTolerance\s*;", source
+    ), "SolveOptions::tolerance should default to kChainTolerance, not a restated number"
+    assert inspect.signature(TSRChain.solve).parameters["tolerance"].default == CHAIN_TOLERANCE
 
 
 def test_the_geodesic_rotation_weight_is_still_one():

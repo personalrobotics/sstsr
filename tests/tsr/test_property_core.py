@@ -15,18 +15,17 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from tsr import TSR, TSRChain, wrap_to_interval
-from tsr.core.utils import EPSILON, geodesic_distance, rotation_angle
+from tsr.core.utils import CHAIN_TOLERANCE, geodesic_distance, rotation_angle
 
 from ._hypothesis_strategies import angles, any_rotation, near_gimbal_rotations, rotations, transforms, tsrs
 
 # --------------------------------------------------------------------------
 # SE(3) conversions
 #
-# Away from gimbal lock the round-trip is exact to ~1e-9 (the C1 fix). Within a
-# few tens of microradians of pitch=±90° the rotation matrix rounds to exact
-# gimbal lock and one roll/yaw DOF must be discarded, so the round-trip is only
-# guaranteed to ~1e-4 there — still far inside the EPSILON=1e-3 tolerance the
-# library uses for validity/containment.
+# Away from gimbal lock the round-trip is exact to ~1e-9 (the C1 fix). Within
+# ~1e-7 rad of pitch=±90° the rotation matrix is treated as exact gimbal lock and
+# one roll/yaw DOF is discarded, which costs at most ~cos(pitch)·π of rotation —
+# under the ANGLE_ATOL=1e-6 that containment absorbs as round-off (#190).
 # --------------------------------------------------------------------------
 
 
@@ -109,7 +108,7 @@ def test_sample_is_valid_and_contained(tsr, data):
     pose = tsr.to_transform(xyzrpy)
     assert tsr.contains(pose)
     dist, _ = tsr.distance(pose)
-    assert abs(dist) < EPSILON
+    assert dist == 0.0
 
 
 @given(tsr=tsrs(), T=transforms())
@@ -118,7 +117,7 @@ def test_contains_iff_distance_zero(tsr, T):
     contained = tsr.contains(T)
     dist, _ = tsr.distance(T)
     if contained:
-        assert abs(dist) < EPSILON
+        assert dist == 0.0
     else:
         assert dist > 0.0
 
@@ -138,7 +137,7 @@ def test_to_xyzrpy_of_a_contained_pose_is_itself_in_bounds(tsr):
     pose = tsr.sample()
     xyzrpy = tsr.to_xyzrpy(pose)
     assert all(tsr.is_valid(xyzrpy)), f"to_xyzrpy returned {xyzrpy}, which this TSR's is_valid rejects"
-    assert geodesic_distance(tsr.to_transform(xyzrpy), pose) < EPSILON
+    assert geodesic_distance(tsr.to_transform(xyzrpy), pose) < CHAIN_TOLERANCE
 
 
 @given(tsr=tsrs())
@@ -200,7 +199,7 @@ def test_multi_chain_sample_is_contained(parts):
     # Warm-started solve takes the fast path and reports a satisfying witness.
     result = chain.solve(sample.pose, initial_guess=sample.coordinates)
     assert result.status == "satisfied"
-    assert result.residual < EPSILON
+    assert result.residual < CHAIN_TOLERANCE
     assert chain.contains(sample.pose, initial_guess=sample.coordinates)
 
 

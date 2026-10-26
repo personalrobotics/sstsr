@@ -10,7 +10,7 @@ import numpy
 
 from . import _chain_solver
 from .tsr import FRAME_ATOL, NANBW, TSR
-from .utils import EPSILON, geodesic_distance, wrap_to_interval
+from .utils import CHAIN_TOLERANCE, geodesic_distance, wrap_to_interval
 
 logger = logging.getLogger(__name__)
 
@@ -302,7 +302,7 @@ class TSRChain:
                 return None
         return float(geodesic_distance(self.to_transform(coordinates), trans))
 
-    def validate_witness(self, trans, coordinates, tolerance=EPSILON):
+    def validate_witness(self, trans, coordinates, tolerance=CHAIN_TOLERANCE):
         """Exact positive certificate: are ``coordinates`` a valid witness for ``trans``?
 
         Validates the coordinates against each component's bounds and recomposes
@@ -313,7 +313,7 @@ class TSRChain:
         residual = self._witness_residual(trans, coordinates)
         return residual is not None and residual < tolerance
 
-    def solve(self, trans, initial_guess=None, max_starts=None, max_nfev=None, tolerance=EPSILON):
+    def solve(self, trans, initial_guess=None, max_starts=None, max_nfev=None, tolerance=CHAIN_TOLERANCE):
         """Inverse chain solve: find coordinates whose composition matches ``trans``.
 
         Returns a :class:`ChainSolveResult`. A valid ``initial_guess`` (a retained

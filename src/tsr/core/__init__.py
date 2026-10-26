@@ -16,6 +16,8 @@ import them from here when you want only the kernel.
 from .tsr import FRAME_ATOL, NANBW, TSR
 from .tsr_chain import ChainSample, ChainSolveResult, TSRChain
 from .utils import (
+    ANGLE_ATOL,
+    CHAIN_TOLERANCE,
     EPSILON,
     geodesic_distance,
     geodesic_error,
@@ -30,6 +32,8 @@ __all__ = [
     "ChainSolveResult",
     "NANBW",
     "FRAME_ATOL",
+    "ANGLE_ATOL",
+    "CHAIN_TOLERANCE",
     "EPSILON",
     "wrap_to_interval",
     "rotation_angle",

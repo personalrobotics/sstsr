@@ -13,7 +13,7 @@ namespace sstsr {
 
 namespace {
 constexpr double kPi = std::numbers::pi;
-constexpr double kGimbalEpsilon = 1e-9;
+constexpr double kGimbalEpsilon = 1e-14;
 
 double norm6(const XyzRpy& v) {
   double s = 0.0;
@@ -49,11 +49,21 @@ TSR::TSR(Transform T0_w, Transform Tw_e, Bounds6 Bw) : T0_w_(T0_w), Tw_e_(Tw_e),
 
 Transform TSR::local(const Transform& T) const { return T0_w_inv_ * (T * Tw_e_inv_); }
 
+// The round-off of composing a pose with T0_w and Tw_e scales with the lengths in that
+// composition, not with the region's width (#190). Mirrors core/tsr.py's _length_atol.
+double TSR::length_atol(const std::array<double, 3>& xyz) const {
+  const auto norm3 = [](double a, double b, double c) { return std::sqrt(a * a + b * b + c * c); };
+  const double scale = norm3(T0_w_.at(0, 3), T0_w_.at(1, 3), T0_w_.at(2, 3)) +
+                       norm3(Tw_e_.at(0, 3), Tw_e_.at(1, 3), Tw_e_.at(2, 3)) + norm3(xyz[0], xyz[1], xyz[2]);
+  return sstsr::length_atol(scale);
+}
+
 std::array<bool, 3> TSR::xyz_within(const std::array<double, 3>& xyz) const {
+  const double atol = length_atol(xyz);
   std::array<bool, 3> out{};
   for (int i = 0; i < 3; ++i) {
     const double x = xyz[static_cast<std::size_t>(i)];
-    out[static_cast<std::size_t>(i)] = (x + kEpsilon) >= cont_.lo(i) && (x - kEpsilon) <= cont_.hi(i);
+    out[static_cast<std::size_t>(i)] = (x + atol) >= cont_.lo(i) && (x - atol) <= cont_.hi(i);
   }
   return out;
 }
@@ -63,11 +73,11 @@ std::array<bool, 3> TSR::rpy_within(const Rpy& rpy_in) const {
   for (int k = 0; k < 3; ++k) {
     const int i = 3 + k;
     const double lo = cont_.lo(i), hi = cont_.hi(i);
-    const double a = wrap_to_interval(rpy_in[static_cast<std::size_t>(k)], lo - kEpsilon);
-    if (lo > hi + kEpsilon) {
-      out[static_cast<std::size_t>(k)] = (a + kEpsilon) >= lo || (a - kEpsilon) <= hi;  // outer interval
+    const double a = wrap_to_interval(rpy_in[static_cast<std::size_t>(k)], lo - kAngleAtol);
+    if (lo > hi + kAngleAtol) {
+      out[static_cast<std::size_t>(k)] = (a + kAngleAtol) >= lo || (a - kAngleAtol) <= hi;  // outer interval
     } else {
-      out[static_cast<std::size_t>(k)] = (a + kEpsilon) >= lo && (a - kEpsilon) <= hi;
+      out[static_cast<std::size_t>(k)] = (a + kAngleAtol) >= lo && (a - kAngleAtol) <= hi;
     }
   }
   return out;
