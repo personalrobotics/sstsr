@@ -28,7 +28,19 @@ recipes, or (d) a service that consumes them, it's misplaced.
 The heart's correctness *is* its mutual consistency. For any `TSR` and pose:
 
 - `sample()` returns a pose that `is_valid()` accepts and `contains()` confirms.
-- `contains(T)` is true ⇔ `distance(T)[0] == 0`.
+- **Membership is exact** (#190). `contains(T)` and `is_valid` hold iff the coordinates lie
+  within `Bw`, up to round-off only: `length_atol(scale)` for translation, with `scale` the
+  summed lengths of `T0_w`, `Tw_e` and the coordinates (the lengths composed into the pose,
+  not the region's width), and `ANGLE_ATOL = 1e-6` rad for rotation. There is no further
+  slack. Before #190 every bound carried a fixed `1e-3` — as wide as a millimetre-scale region
+  — and `distance` jumped from 0 to about `1e-3` at its edge.
+- `contains(T)` is true ⇔ `distance(T)[0] == 0`. Outside, `distance` grows continuously from
+  the boundary: a pose `2e-4` past a bound is not contained and measures `2e-4`.
+- **Acceptance tolerances belong to the caller.** A planner that accepts a pose "close
+  enough" compares `distance` against its own tolerance; the region does not widen itself
+  for it. The one tolerance the library owns beyond round-off is `CHAIN_TOLERANCE = 1e-3`,
+  the default residual below which a chain's inverse solve reports `"satisfied"` — a solver
+  tolerance, never applied to a single region's membership.
 - For a pose the region contains, `to_xyzrpy(T)` returns coordinates that `is_valid()`
   accepts, and recomposing them returns `T`. This is a real constraint rather than a
   restatement: RPY double-covers rotations — `(r, p, y)` and `(r ± π, −π − p, y ± π)` are

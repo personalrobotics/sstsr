@@ -33,7 +33,7 @@ from typing import Any
 
 import numpy as np
 
-from tsr import EPSILON, TSR, TSRChain
+from tsr import CHAIN_TOLERANCE, TSR, TSRChain
 
 ARTIFACT = Path(__file__).resolve().parent.parent / "tests" / "reference" / "tsr_conformance.json"
 SEED = 20260929
@@ -91,6 +91,27 @@ def regions() -> list[tuple[str, TSR]]:
                 np.array([[-0.02, 0.02], [-0.02, 0.02], [-0.02, 0.02], [-3.0, 3.0], [-0.3, 0.3], [-0.1, 0.1]]),
             ),
         ),
+        (
+            # A millimetre-scale region the old 1e-3 slack was as wide as (#190): an approach
+            # line +-2 mm along z, everything else fixed, posed away from the origin.
+            "approach_line",
+            TSR(
+                _frame(0.6, -0.3, 0.9, 0.0, pi / 2, 0.4),
+                _frame(0.0, 0.0, -0.15),
+                np.array([[0, 0], [0, 0], [-0.002, 0.002], [0, 0], [0, 0], [0, 0]]),
+            ),
+        ),
+        (
+            # Pitch fixed 1e-5 under pi/2: inside the old gimbal band (|R[2,0]| within 1e-9 of
+            # 1), where pitch was snapped to pi/2 and every pose of this region read 1e-5 out --
+            # hidden by the 1e-3 slack until #190 removed it.
+            "pitch_in_old_gimbal_band",
+            TSR(
+                _frame(0.1, 0.2, 0.3, 0.2, 0.1, -0.3),
+                np.eye(4),
+                np.array([[-0.05, 0.05], [0, 0], [0, 0], [0.3, 0.3], [pi / 2 - 1e-5, pi / 2 - 1e-5], [-0.7, -0.7]]),
+            ),
+        ),
     ]
 
 
@@ -106,6 +127,29 @@ def probes(t: TSR, rng: np.random.Generator) -> list[np.ndarray]:
         out.append(t.T0_w @ _frame(0.01, -0.01, 0.0, 0.2, pitch, 0.4) @ t.Tw_e)
     out.append(t.T0_w @ _frame(0.0, 0.0, 0.0, np.pi, 0.0, np.pi) @ t.Tw_e)  # an RPY-equivalent representation
     out.append(t.T0_w @ _frame(0.0, 0.0, 0.0, 0.0, 0.0, -np.pi) @ t.Tw_e)  # yaw exactly at the seam
+    out.extend(_band_sweep(t))
+    return out
+
+
+# Offsets past an upper bound that straddle the 1e-3 slack contains granted until #190: on
+# the bound, inside the old band, and just beyond it. distance must grow continuously through
+# all four -- it used to read 0, 0, 0 and then jump to 1.1e-3.
+BAND_OFFSETS = (0.0, 2e-4, 9e-4, 1.1e-3)
+
+
+def _band_sweep(t: TSR) -> list[np.ndarray]:
+    """Poses at the chart's midpoint pushed past the upper bound of x, and of the first
+    rotational row narrower than a turn, by each of ``BAND_OFFSETS``. Composed directly,
+    since ``to_transform`` refuses out-of-bounds coordinates."""
+    cont = t.continuous_bounds
+    mid = (cont[:, 0] + cont[:, 1]) / 2.0
+    rows = [0] + [i for i in range(3, 6) if cont[i, 1] - cont[i, 0] < 2 * np.pi][:1]
+    out = []
+    for i in rows:
+        for d in BAND_OFFSETS:
+            x = mid.copy()
+            x[i] = cont[i, 1] + d
+            out.append(t.T0_w @ TSR.xyzrpy_to_trans(x) @ t.Tw_e)
     return out
 
 
@@ -453,7 +497,7 @@ def generate() -> dict[str, Any]:
         "chain_defaults": {
             "max_starts": TSRChain._DEFAULT_MAX_STARTS,
             "max_nfev": TSRChain._DEFAULT_MAX_NFEV,
-            "tolerance": EPSILON,
+            "tolerance": CHAIN_TOLERANCE,
         },
         "empty_chain": record_empty_chain(),
         "chains": [record_chain(name, c, chain_rng) for name, c in chains()],

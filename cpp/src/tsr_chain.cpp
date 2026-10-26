@@ -199,9 +199,8 @@ ChainSolveResult TSRChain::solve(const Transform& T, const SolveOptions& opt) co
   if (n == 1) {
     if (tsrs_[0].contains(T)) {
       ChainCoords coords{tsrs_[0].to_xyzrpy(T)};
-      // No tolerance re-check, matching the Python: contains grants kEpsilon of slack per
-      // coordinate while to_transform clips to the chart, so this can report kSatisfied with a
-      // residual at or above tolerance. Copied rather than corrected -- the corpus pins it.
+      // No tolerance re-check, matching the Python. contains absorbs only round-off (#190), so
+      // the residual is round-off too -- below any tolerance coarser than kAngleAtol.
       //
       // The residual is computed into a named value before the move, because the move leaves
       // `coords` empty and a braced initialiser evaluates left to right.

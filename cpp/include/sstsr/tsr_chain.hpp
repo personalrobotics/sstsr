@@ -65,7 +65,7 @@ struct SolveOptions {
   std::optional<ChainCoords> initial_guess{};
   int max_starts = kDefaultMaxStarts;  // >= 0
   int max_nfev = kDefaultMaxNfev;      // >= 1
-  double tolerance = kEpsilon;         // finite, > 0
+  double tolerance = kChainTolerance;         // finite, > 0
 };
 
 // A sequence of composed TSRs. The same chain as src/tsr/core/tsr_chain.py's TSRChain, rule
@@ -120,7 +120,7 @@ class TSRChain {
   // An exact positive certificate: one bounds check and one forward composition, no
   // optimiser. An empty chain has no witness, and a wrong coordinate count is not a witness,
   // so both return false rather than throwing (issue #87).
-  bool validate_witness(const Transform& T, const ChainCoords& c, double tolerance = kEpsilon) const;
+  bool validate_witness(const Transform& T, const ChainCoords& c, double tolerance = kChainTolerance) const;
 
   ChainSolveResult solve(const Transform& T, const SolveOptions& opt = {}) const;
 

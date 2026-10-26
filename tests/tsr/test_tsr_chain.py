@@ -11,7 +11,7 @@ import unittest
 import numpy as np
 from numpy import pi
 
-from tsr.core.utils import EPSILON, geodesic_distance
+from tsr.core.utils import CHAIN_TOLERANCE, geodesic_distance
 from tsr.tsr import TSR
 from tsr.tsr_chain import TSRChain
 
@@ -373,7 +373,7 @@ class TestTSRChainContainsSemantics(unittest.TestCase):
         # contains() agrees with distance() at the tolerance contains() itself uses.
         for T in (composed, far):
             dist, _ = chain.distance(T)
-            self.assertEqual(chain.contains(T), abs(dist) < EPSILON)
+            self.assertEqual(chain.contains(T), abs(dist) < CHAIN_TOLERANCE)
 
     def test_multi_tsr_chain_sample_is_contained(self):
         """A chain must contain a pose from its own sample(), even with fixed
@@ -383,7 +383,7 @@ class TestTSRChainContainsSemantics(unittest.TestCase):
         for _ in range(20):
             T = chain.sample()
             self.assertTrue(chain.contains(T))
-            self.assertLess(abs(chain.distance(T)[0]), EPSILON)
+            self.assertLess(abs(chain.distance(T)[0]), CHAIN_TOLERANCE)
 
     def test_multi_tsr_chain_sample_contained_nonidentity_frames(self):
         """The stronger #57 case: mixed fixed/free coords AND non-identity T0_w/Tw_e.
@@ -409,7 +409,7 @@ class TestTSRChainContainsSemantics(unittest.TestCase):
             with warnings.catch_warnings():
                 warnings.simplefilter("error", RuntimeWarning)  # no zero-width-step NaNs
                 dist, _ = chain.distance(pose)
-            self.assertLess(abs(dist), EPSILON)
+            self.assertLess(abs(dist), CHAIN_TOLERANCE)
             self.assertTrue(chain.contains(pose))
 
     def test_chain_closest_transform(self):
@@ -418,7 +418,7 @@ class TestTSRChainContainsSemantics(unittest.TestCase):
         chain = TSRChain(TSRs=[TSR(Bw=Bw), TSR(Bw=Bw)])
         inside = chain.sample()
         dist, T = chain.closest_transform(inside)
-        self.assertLess(abs(dist), EPSILON)
+        self.assertLess(abs(dist), CHAIN_TOLERANCE)
         self.assertTrue(chain.contains(T))
         # T is the composed pose of the returned coordinates.
         _, bwopt = chain.distance(inside)
@@ -466,13 +466,11 @@ class TestTSRChainContainsSemantics(unittest.TestCase):
         far[0, 3] = 5.0
         transforms.append(far)
 
-        from tsr.utils import EPSILON
-
         for t in transforms:
             dist, _ = chain.distance(t)
             self.assertEqual(
                 chain.contains(t),
-                abs(dist) < EPSILON,
+                abs(dist) < CHAIN_TOLERANCE,
                 f"contains/distance mismatch: contains={chain.contains(t)}, dist={dist}, pos={t[:3, 3]}",
             )
 
@@ -499,7 +497,7 @@ class TestTSRChainWitnessAPI(unittest.TestCase):
         and ordinary non-wrapping rotation intervals. The queried pose is built
         from known-valid chain coordinates, so it is provably a member -- yet the
         cold multi-start solve settles in a nonzero basin (residual well above
-        EPSILON). Membership is decided by the retained witness, not the solve.
+        CHAIN_TOLERANCE). Membership is decided by the retained witness, not the solve.
         """
         parts = [
             TSR(
@@ -586,7 +584,7 @@ class TestTSRChainWitnessAPI(unittest.TestCase):
         # A warm start from the witness takes the fast path: satisfied, no work.
         warm = chain.solve(pose, initial_guess=coordinates)
         self.assertEqual(warm.status, "satisfied")
-        self.assertLess(warm.residual, EPSILON)
+        self.assertLess(warm.residual, CHAIN_TOLERANCE)
         self.assertEqual(warm.nfev, 0)
         self.assertEqual(warm.starts, 0)
         self.assertTrue(chain.contains(pose, initial_guess=coordinates))
@@ -596,7 +594,7 @@ class TestTSRChainWitnessAPI(unittest.TestCase):
         # one particular pose is a rule -- "not_found" remains no proof of non-membership.
         cold = chain.solve(pose)
         self.assertEqual(cold.status, "satisfied")
-        self.assertLess(cold.residual, EPSILON)
+        self.assertLess(cold.residual, CHAIN_TOLERANCE)
         self.assertLessEqual(cold.nfev, TSRChain._DEFAULT_MAX_NFEV)
         self.assertTrue(chain.contains(pose))
 
@@ -690,7 +688,7 @@ class TestTSRChainWitnessAPI(unittest.TestCase):
         pose = chain.sample()
         result = chain.solve(pose)
         self.assertEqual(result.status, "satisfied")
-        self.assertLess(result.residual, EPSILON)
+        self.assertLess(result.residual, CHAIN_TOLERANCE)
 
     # --- #87: wrapping rotational witnesses -------------------------------------
 
@@ -942,7 +940,7 @@ class TestTSRChainWitnessAPI(unittest.TestCase):
                     self.assertGreaterEqual(result.coordinates[i, j], tsr._Bw_cont[j, 0] - 1e-12)
                     self.assertLessEqual(result.coordinates[i, j], tsr._Bw_cont[j, 1] + 1e-12)
             if result.status == "satisfied":
-                self.assertLess(result.residual, EPSILON)
+                self.assertLess(result.residual, CHAIN_TOLERANCE)
 
     # --- #91: strict aggregate max_nfev budget ----------------------------------
 

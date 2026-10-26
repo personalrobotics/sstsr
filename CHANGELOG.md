@@ -4,6 +4,45 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+`TSR.contains` no longer accepts poses up to 1 mm (and 1 mrad) outside a region, and
+`TSR.distance` no longer jumps from 0 to about `1e-3` at the edge of that band (#190).
+
+**Migration: set your own tolerance where you decide acceptance.** If you relied on
+`contains` accepting a pose just outside `Bw` — a planned waypoint, an executed pose, a
+projection that converged to within `1e-3` — compare `distance(T)[0]` against a tolerance
+you choose instead. sscbirrt's `membership_tolerance` is already that tolerance.
+
+### Changed
+- **Membership is exact, up to round-off** (#190). `contains` and `is_valid` used to grant a
+  fixed `EPSILON = 1e-3` on both sides of every bound, a 2015 round-off guard that was
+  absolute rather than scaled: as wide as Geodude's ±2 mm approach line. Planned waypoints
+  then read distance 0 while up to 1 mm outside `Bw`, and a few-µm joint change moved them
+  across the band's edge to a distance just over sscbirrt's `1e-3` tolerance
+  (personalrobotics/sscbirrt#269). Now the only allowance is round-off: the contract's
+  scale-aware `length_atol` for translation (scaled by the lengths composed into the pose)
+  and `ANGLE_ATOL = 1e-6` rad for rotation. A pose `2e-4` past a bound is not contained and
+  its distance is `2e-4`; `distance` is continuous through the old band, and
+  `contains ⇔ distance == 0` still holds.
+- **The gimbal-lock band of RPY extraction is narrowed from `|R[2,0]|` within `1e-9` of 1 to
+  within `1e-14`.** Inside the old band pitch was snapped to ±π/2, discarding up to
+  `4.5e-5` rad — hidden by the `1e-3` slack, and exposed by removing it: every pose of a region
+  with pitch fixed `1e-5` under π/2 read as outside it. Snapping now costs at most about
+  `1.4e-7·π` rad, under `ANGLE_ATOL`. `to_xyzrpy` and `distance` change in the old band
+  accordingly.
+- **The chain's solve tolerance has its own name**: `CHAIN_TOLERANCE` (C++
+  `kChainTolerance`), still `1e-3`, is the default residual below which `TSRChain.solve`
+  reports `"satisfied"`. `EPSILON` and `kEpsilon` remain as deprecated aliases of it (the C++
+  one marked `[[deprecated]]`); neither is a containment slack any more.
+
+### Added
+- `tsr.ANGLE_ATOL` and `tsr.CHAIN_TOLERANCE`; C++ `sstsr::kAngleAtol`,
+  `sstsr::length_atol` and `sstsr::kChainTolerance`.
+- Conformance corpus: a sweep at `0`, `2e-4`, `9e-4` and `1.1e-3` past an upper bound in
+  every region, an `approach_line` region, and a `pitch_in_old_gimbal_band` region (11
+  regions, 282 probes).
+
 ## [3.5.0] — 2026-10
 
 `TSR.distance` was measuring from the wrong rotation representative, and reporting poses just

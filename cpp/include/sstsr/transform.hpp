@@ -28,7 +28,7 @@ using XyzRpy = std::array<double, 6>;
 
 // The conventions of src/tsr/core/tsr.py, which is the source of truth for the rules.
 // rpy_to_rot is Z-Y-X: yaw about z, then pitch about y, then
-// roll about x. rot_to_rpy takes pitch = -asin(R[2,0]) off the gimbal lock (|R[2,0]| within 1e-9 of 1)
+// roll about x. rot_to_rpy takes pitch = -asin(R[2,0]) off the gimbal lock (|R[2,0]| within 1e-14 of 1)
 // and the coupled branches at the lock with yaw fixed to 0.
 std::array<double, 9> rpy_to_rot(const Rpy& rpy);           // row-major 3x3
 Rpy rot_to_rpy(const Transform& T);                          // from T's rotation block

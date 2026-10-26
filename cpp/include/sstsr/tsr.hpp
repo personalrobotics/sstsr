@@ -11,8 +11,19 @@
 
 namespace sstsr {
 
-// core/utils.py's EPSILON: the containment slack, applied on both sides of every bound.
-constexpr double kEpsilon = 0.001;
+// core/utils.py's CHAIN_TOLERANCE: the default satisfaction tolerance of a chain's inverse
+// solve. A solver tolerance, not part of any region's geometry: contains does not use it (#190).
+constexpr double kChainTolerance = 0.001;
+
+// Deprecated alias of kChainTolerance. Until #190 it was also the slack contains granted on
+// every side of every bound; it no longer is.
+[[deprecated("use kChainTolerance; contains no longer grants this slack (#190)")]]
+constexpr double kEpsilon = kChainTolerance;
+
+// core/utils.py's ANGLE_ATOL and length_atol: the round-off contains and is_valid absorb, and
+// nothing more. Translation's scales with the lengths composed into the pose (see TSR::length_atol).
+constexpr double kAngleAtol = 1e-6;
+inline double length_atol(double scale) { return 1e-9 + 1e-6 * scale; }
 
 // [lo, hi] for x, y, z, roll, pitch, yaw. A rotational row with hi < lo is an outer interval
 // wrapping through +-pi.
@@ -37,7 +48,7 @@ class TSR {
   const Bounds6& Bw() const { return Bw_; }
   const Bounds6& continuous_bounds() const { return cont_; }  // the Python's _Bw_cont
 
-  bool contains(const Transform& T) const;
+  bool contains(const Transform& T) const;  // within Bw up to round-off only (kAngleAtol, length_atol)
   double distance(const Transform& T) const;                      // 0 if contained; Berenson et al. 2011 Sec. 4.2 otherwise
   std::pair<double, XyzRpy> distance_bwopt(const Transform& T) const;  // the Python's distance(): (dist, bwopt)
   std::pair<double, Transform> closest_transform(const Transform& T) const;
@@ -51,6 +62,7 @@ class TSR {
 
  private:
   Transform local(const Transform& T) const;  // inv(T0_w) * T * inv(Tw_e)
+  double length_atol(const std::array<double, 3>& xyz) const;  // the Python's TSR._length_atol
   std::array<bool, 3> xyz_within(const std::array<double, 3>& xyz) const;
   std::array<bool, 3> rpy_within(const Rpy& rpy) const;
   std::pair<std::array<bool, 3>, std::optional<Rpy>> rot_within_rpy_bounds(const Transform& local) const;
