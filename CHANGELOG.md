@@ -4,10 +4,15 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [4.0.0] — 2026-10
 
 `TSR.contains` no longer accepts poses up to 1 mm (and 1 mrad) outside a region, and
 `TSR.distance` no longer jumps from 0 to about `1e-3` at the edge of that band (#190).
+
+Major rather than minor: `contains` verdicts change, not only numbers. A pose that was
+accepted inside the old band is now refused, and a downstream conformance corpus generated
+from 3.x no longer matches. Upgrade deliberately — `sstsr>=4,<5` — and regenerate any such
+corpus when you do.
 
 **Migration: set your own tolerance where you decide acceptance.** If you relied on
 `contains` accepting a pose just outside `Bw` — a planned waypoint, an executed pose, a
