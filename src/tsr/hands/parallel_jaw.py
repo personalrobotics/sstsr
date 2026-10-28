@@ -106,8 +106,9 @@ class ParallelJawGripper(GripperBase):
 
         Args:
             graspable_depth: max penetration depth for this grasp geometry,
-                typically min(finger_length, object_radius) for side grasps
-                or finger_length for top/bottom grasps.
+                typically min(finger_length, object_radius) for side grasps,
+                min(finger_length, approach extent) for box grasps (#195), or
+                finger_length for cylinder top/bottom grasps.
         """
         return self.clearance_fraction * graspable_depth
 
@@ -633,13 +634,15 @@ class ParallelJawGripper(GripperBase):
         finger_orientation: str,
         mode: str = "face",
         why: Optional[List[str]] = None,
+        margin_basis: str = "supplied",
     ) -> List[TSRTemplate]:
         """k depth templates for one face × finger-orientation combo.
 
         Fingers open along y_ee, spanning span_dim.  The gripper slides in
         slide_bw_row (world axis 0/1/2 = x/y/z) ± slide_half from the TSR
         origin.  Returns [] if the finger span can't fit around the object or
-        the required preshape exceeds max_aperture. When it returns [], the reason
+        the required preshape exceeds max_aperture. ``margin_basis`` is recorded in
+        each template's provenance with the margin. When it returns [], the reason
         is appended to ``why`` for the public method's diagnostic (see
         :meth:`_box_empty_reason`).
         """
@@ -712,7 +715,13 @@ class ParallelJawGripper(GripperBase):
                         depth_index=i,
                         depth_count=len(depths),
                         depth=float(d),
-                        metadata={"slide_axis": "xyz"[slide_bw_row], "span": float(span_dim)},
+                        # The edge margin the band used, and where it came from (#195).
+                        metadata={
+                            "slide_axis": "xyz"[slide_bw_row],
+                            "span": float(span_dim),
+                            "margin": float(margin),
+                            "margin_basis": margin_basis,
+                        },
                     ),
                     **common,
                 )
@@ -756,7 +765,10 @@ class ParallelJawGripper(GripperBase):
         Each orientation generates k depth templates if max_aperture allows.
         """
         self._check_depth_count(k)
-        clearance = self._resolve_clearance(clearance, self.finger_length)
+        # The default margin scales with the box's extent along the approach, as the cylinder
+        # side grasp's scales with its radius (#195); a supplied clearance is used as given.
+        margin_basis = "supplied" if clearance is not None else "min(finger_length, approach_extent)"
+        clearance = self._resolve_clearance(clearance, min(self.finger_length, box_z))
         self._validate_box(box_x, box_y, box_z, preshape)
         # One margin for the diagnostic precheck AND for generation (#121): prechecking
         # with the raw clearance would report cannot_straddle where the real cause is an
@@ -795,6 +807,7 @@ class ParallelJawGripper(GripperBase):
             name_prefix=name,
             description=description,
             why=why,
+            margin_basis=margin_basis,
         )
         templates = self._box_face_templates(
             T,
@@ -853,7 +866,10 @@ class ParallelJawGripper(GripperBase):
         Each orientation generates k depth templates if max_aperture allows.
         """
         self._check_depth_count(k)
-        clearance = self._resolve_clearance(clearance, self.finger_length)
+        # The default margin scales with the box's extent along the approach, as the cylinder
+        # side grasp's scales with its radius (#195); a supplied clearance is used as given.
+        margin_basis = "supplied" if clearance is not None else "min(finger_length, approach_extent)"
+        clearance = self._resolve_clearance(clearance, min(self.finger_length, box_z))
         self._validate_box(box_x, box_y, box_z, preshape)
         # One margin for the diagnostic precheck AND for generation (#121): prechecking
         # with the raw clearance would report cannot_straddle where the real cause is an
@@ -892,6 +908,7 @@ class ParallelJawGripper(GripperBase):
             name_prefix=name,
             description=description,
             why=why,
+            margin_basis=margin_basis,
         )
         templates = self._box_face_templates(
             T,
@@ -951,7 +968,10 @@ class ParallelJawGripper(GripperBase):
         Each valid orientation (max_aperture allows the span) generates k templates.
         """
         self._check_depth_count(k)
-        clearance = self._resolve_clearance(clearance, self.finger_length)
+        # The default margin scales with the box's extent along the approach, as the cylinder
+        # side grasp's scales with its radius (#195); a supplied clearance is used as given.
+        margin_basis = "supplied" if clearance is not None else "min(finger_length, approach_extent)"
+        clearance = self._resolve_clearance(clearance, min(self.finger_length, box_x))
         self._validate_box(box_x, box_y, box_z, preshape)
         # One margin for the diagnostic precheck AND for generation (#121): prechecking
         # with the raw clearance would report cannot_straddle where the real cause is an
@@ -995,6 +1015,7 @@ class ParallelJawGripper(GripperBase):
             name_prefix=name,
             description=description,
             why=why,
+            margin_basis=margin_basis,
         )
         templates = []
         for T_ref, z_ee, sign in (
@@ -1058,7 +1079,10 @@ class ParallelJawGripper(GripperBase):
         Each valid orientation (max_aperture allows the span) generates k templates.
         """
         self._check_depth_count(k)
-        clearance = self._resolve_clearance(clearance, self.finger_length)
+        # The default margin scales with the box's extent along the approach, as the cylinder
+        # side grasp's scales with its radius (#195); a supplied clearance is used as given.
+        margin_basis = "supplied" if clearance is not None else "min(finger_length, approach_extent)"
+        clearance = self._resolve_clearance(clearance, min(self.finger_length, box_y))
         self._validate_box(box_x, box_y, box_z, preshape)
         # One margin for the diagnostic precheck AND for generation (#121): prechecking
         # with the raw clearance would report cannot_straddle where the real cause is an
@@ -1102,6 +1126,7 @@ class ParallelJawGripper(GripperBase):
             name_prefix=name,
             description=description,
             why=why,
+            margin_basis=margin_basis,
         )
         templates = []
         for T_ref, z_ee, sign in (

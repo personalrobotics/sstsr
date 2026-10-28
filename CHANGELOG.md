@@ -15,27 +15,35 @@ That is what Geodude's lifts were starting in collision with: a top grasp of `ge
 (72 × 88 × 28 mm) closed across 72 mm puts the fingertips about 18 mm further down, into
 the worktop.
 
-Minor rather than patch: there is a new API, and **the 2F-140's and 2F-85's templates
-change**. `FrankaHand` and every `ParallelJawGripper` built from dimensions are unchanged:
-they declare no curve, so their reach is `finger_length` at every width, as before. Pin
+A box grasp's default margin now scales with the box, as the cylinder side grasp's already
+scaled with its radius (#195). It used to be 10% of `finger_length` whatever the box, a
+fraction of a length a short box doesn't have, and with the closed reach made honest that
+emptied short boxes' top grasps that are physically sound.
+
+Minor rather than patch: there is a new API, and templates change in two places. **The
+2F-140's and 2F-85's** change wherever the closed reach binds. `FrankaHand` and every
+`ParallelJawGripper` built from dimensions declare no reach curve, so their reach is
+`finger_length` at every width, as before. **Every hand's default box margin** changes on a
+box shorter than its fingers along the approach. A box at least as long as the fingers, and
+any explicitly supplied `clearance`, give exactly the templates they gave before. Pin
 `sstsr>=4.1` if you rely on Robotiq templates keeping their closed fingertips inside the
 object.
 
 **What changes for the Robotiq hands.** Only the deep end of a depth band, and only where it
 faces the far side of what the fingers span: it moves shallower by `reach(span) −
 finger_length`. Shallow depths, palm limits, slide bands, preshapes and frames do not move.
-For `Robotiq2F140()` at its default clearance (11.4 mm for a box, 3.3 mm for this cylinder):
+For `Robotiq2F140()` at its default margin, first with the closed reach alone (#193) and then
+with the box margin scaled as well (#195):
 
-| call | before | after |
-|---|---|---|
-| `grasp_box_top(0.072, 0.088, 0.028)` | 6 templates, depths 11.4–16.6 mm | none: `closed_reach_too_long` |
-| `grasp_box_top(0.158, 0.028, 0.084)` | 3, depths 11.4 / 42.0 / 72.6 mm | 3, depths 11.4 / 30.3 / 49.1 mm |
-| `grasp_cylinder_side(0.033, 0.123)` | 6, depths 33.0 / 47.9 / 62.7 mm | 6, depths 33.0 / 38.5 / 44.0 mm |
+| call | 4.0 | closed reach (#193) | and scaled margin (#195) |
+|---|---|---|---|
+| `grasp_box_top(0.072, 0.088, 0.028)` | 6, margin 11.4 mm, depths 11.4–16.6 mm | none: `closed_reach_too_long` | 6, margin 2.8 mm, depths 2.8 / 5.2 / 7.7 mm (x), 2.8 / 7.0 / 11.3 mm (y) |
+| `grasp_box_top(0.158, 0.028, 0.084)` | 3, margin 11.4 mm, depths 11.4 / 42.0 / 72.6 mm | 3, depths 11.4 / 30.3 / 49.1 mm | 3, margin 8.4 mm, depths 8.4 / 30.3 / 52.1 mm |
+| `grasp_cylinder_side(0.033, 0.123)` | 6, margin 3.3 mm, depths 33.0 / 47.9 / 62.7 mm | 6, depths 33.0 / 38.5 / 44.0 mm | unchanged by #195 |
 
-The gelatin box still has top grasps at a smaller clearance — up to 5.2 mm across its 72 mm,
-7.0 mm across its 88 mm — which is the consumer's choice to make. Radial grasps need a radius beyond the closed-reach gain: with
-default clearance the 2F-140 side-grasps cylinders and spheres from 24 mm radius, the 2F-85
-from 15 mm, where both used to accept any radius their aperture allowed.
+Radial grasps need a radius beyond the closed-reach gain: with default clearance the 2F-140
+side-grasps cylinders and spheres from 24 mm radius, the 2F-85 from 15 mm, where both used to
+accept any radius their aperture allowed.
 
 ### Added
 - **`ParallelJawGripper.reach(width)`** (#193): how far the fingertips reach past the palm
@@ -54,6 +62,18 @@ from 15 mm, where both used to accept any radius their aperture allowed.
   an empty band for the open hand.
 
 ### Changed
+- **A box grasp's inferred default margin is `clearance_fraction × min(finger_length,
+  approach_extent)`** (#195), where `approach_extent` is the box's extent along that family's
+  approach (`box_z` for top and bottom, `box_x` and `box_y` for the faces). It mirrors the
+  cylinder side grasp's `min(finger_length, radius)`. Only the inferred default changes: an
+  explicit `clearance` is used exactly as given, and where `approach_extent ≥ finger_length`
+  the default is what it was. The closed-reach bound still holds, so a smaller margin never
+  lets the fingertips, open or closed, leave the box. As before, the one margin also sets
+  the slide edges and the default preshape. There is no absolute floor: an application that
+  needs more passes an explicit, measured `clearance`.
+- **Box templates record their margin** (#195): provenance `metadata["margin"]` is the edge
+  margin the depth and slide bands used, and `metadata["margin_basis"]` is `"supplied"` or
+  `"min(finger_length, approach_extent)"`.
 - **Every depth limit that faces the far side of what the fingers span holds for the closed
   fingertips too** (#193): it is `extent − m − (reach(span) − finger_length)` rather than
   `extent − m`. That covers box top, bottom and both face families (`span` is the box
@@ -74,6 +94,14 @@ from 15 mm, where both used to accept any radius their aperture allowed.
   radial object's radius past a linkage hand's closed-reach gain, and the mutation-gate
   corpus's torus is 22 mm / 18 mm instead of 30 mm / 10 mm, so the 2F-85 can still side-grasp
   its tube.
+- **Tests for the scaled margin** (#195). The closed-reach property now also runs at the
+  inferred default, holding each box template to the margin it records, over boxes from far
+  shorter than every finger to longer than the longest. `tests/tsr/hands/test_box_margin.py`
+  checks the compatibility promise: large boxes at the default and explicit clearances at any
+  size hash the same as templates recorded before the change, in
+  `tests/reference/box_margin_baseline.json`, apart from the two new provenance fields.
+  `test_reproduction_retains_span_x` certified its box at the old default and now uses the
+  new one.
 
 ## [4.0.0] — 2026-10
 

@@ -315,7 +315,8 @@ class GripperBase(ABC):
             box_z:     Box height [m] (along z-axis; top face at z=box_z).
             preshape:  Jaw opening [m]. Defaults to max_aperture / 2.
             k:         Number of discrete approach depths per face (default 3).
-            clearance: Safety buffer [m]. Defaults to 10% of finger_length.
+            clearance: Safety buffer [m]. Defaults to 10% of min(finger_length,
+                       the box's extent along the approach) (#195).
             subject:   Label for the end-effector entity.
             reference: Label for the reference object.
 
@@ -361,7 +362,8 @@ class GripperBase(ABC):
             box_z:     Box height [m] (z of top face).
             preshape:  Jaw opening [m]. Defaults to max_aperture / 2.
             k:         Number of discrete approach depths (default 3).
-            clearance: Safety buffer [m]. Defaults to 10% of finger_length.
+            clearance: Safety buffer [m]. Defaults to 10% of min(finger_length,
+                       the box's extent along the approach) (#195).
 
         Returns:
             List of k TSRTemplates.
@@ -397,7 +399,8 @@ class GripperBase(ABC):
                        The TSR origin is the bottom face at z = 0.
             preshape:  Jaw opening [m]. Defaults to max_aperture / 2.
             k:         Number of discrete approach depths (default 3).
-            clearance: Safety buffer [m]. Defaults to 10% of finger_length.
+            clearance: Safety buffer [m]. Defaults to 10% of min(finger_length,
+                       the box's extent along the approach) (#195).
 
         Returns:
             List of k TSRTemplates.
@@ -429,7 +432,8 @@ class GripperBase(ABC):
             box_z:     Box height [m].
             preshape:  Jaw opening [m]. Defaults to max_aperture / 2.
             k:         Number of discrete approach depths per face (default 3).
-            clearance: Safety buffer [m]. Defaults to 10% of finger_length.
+            clearance: Safety buffer [m]. Defaults to 10% of min(finger_length,
+                       the box's extent along the approach) (#195).
 
         Returns:
             List of 2*k TSRTemplates (k for +x face, k for -x face).
@@ -461,7 +465,8 @@ class GripperBase(ABC):
             box_z:     Box height [m].
             preshape:  Jaw opening [m]. Defaults to max_aperture / 2.
             k:         Number of discrete approach depths per face (default 3).
-            clearance: Safety buffer [m]. Defaults to 10% of finger_length.
+            clearance: Safety buffer [m]. Defaults to 10% of min(finger_length,
+                       the box's extent along the approach) (#195).
 
         Returns:
             List of 2*k TSRTemplates (k for +y face, k for -y face).

@@ -67,11 +67,16 @@ def _bw_samples(t):
 
 
 def _violations(hand, extent, dims, templates, clearance):
-    """Every pose at which the palm or the open or closed fingertips break the clearance."""
+    """Every pose at which the palm or the open or closed fingertips break the clearance.
+
+    ``clearance=None`` means the factory inferred it: each box template is then held to the
+    margin it records in its provenance (#195).
+    """
     scale = max(dims) if len(dims) > 1 else dims[0]
     tol = 1e-9 + 1e-6 * scale  # the contract's length tolerance
     out = []
     for t in templates:
+        margin = clearance if clearance is not None else t.provenance.metadata["margin"]
         tsr = t.instantiate(np.eye(4))
         for xi in _bw_samples(t):
             pose = tsr.to_transform(xi)
@@ -85,8 +90,8 @@ def _violations(hand, extent, dims, templates, clearance):
                 "closed fingertips inside the far face": far - (p + hand.reach(hi - lo)),
             }
             for what, gap in gaps.items():
-                if gap < clearance - tol:
-                    out.append(f"{t.name}: {what} by {gap * 1e3:.3f} mm < {clearance * 1e3:g} mm")
+                if gap < margin - tol:
+                    out.append(f"{t.name}: {what} by {gap * 1e3:.3f} mm < {margin * 1e3:g} mm")
     return out
 
 
@@ -99,10 +104,13 @@ class TestClosedFingertipsStayInside(unittest.TestCase):
         self.assertEqual(_violations(hand, extent, dims, templates, clearance), [], (type(hand).__name__, dims))
 
     def test_boxes(self):
+        # Explicit clearances, and the inferred default, which scales with a short box (#195):
+        # BOX_SIDES runs from far shorter than every finger to longer than the longest.
         families = ("grasp_box_top", "grasp_box_bottom", "grasp_box_face_x", "grasp_box_face_y")
         for hand in HANDS:
             counts = {}
-            for dims, c, family in itertools.product(itertools.product(BOX_SIDES, repeat=3), CLEARANCES, families):
+            sizes = itertools.product(BOX_SIDES, repeat=3)
+            for dims, c, family in itertools.product(sizes, (None,) + CLEARANCES, families):
                 self._check(hand, family, _box_extent, dims, c, counts)
             # Not vacuous: the grid reaches every family on every hand.
             self.assertTrue(all(counts.get(f) for f in families), (type(hand).__name__, counts))
@@ -126,14 +134,15 @@ class TestClosedReachDiagnostic(unittest.TestCase):
         # The same jaw without the linkage: the open hand fits each of these.
         prismatic = ParallelJawGripper(finger_length=hand.finger_length, max_aperture=hand.max_aperture)
         cases = (
-            ("grasp_box_top", (0.072, 0.088, 0.028)),  # a gelatin box: the fingertips reach the table
-            ("grasp_cylinder_side", (0.015, 0.1)),
-            ("grasp_cylinder_top", (0.02, 0.025)),
+            # A short box: closed across either side, the fingertips would reach the table.
+            ("grasp_box_top", (0.07, 0.09, 0.03), {"clearance": 0.009}),
+            ("grasp_cylinder_side", (0.015, 0.1), {}),
+            ("grasp_cylinder_top", (0.02, 0.025), {}),
         )
-        for family, dims in cases:
-            self.assertTrue(getattr(prismatic, family)(*dims), family)
+        for family, dims, kw in cases:
+            self.assertTrue(getattr(prismatic, family)(*dims, **kw), family)
             with self.assertLogs("tsr.hands.base", level=logging.DEBUG) as logs:
-                self.assertEqual(getattr(hand, family)(*dims), [], family)
+                self.assertEqual(getattr(hand, family)(*dims, **kw), [], family)
             self.assertIn("closed_reach_too_long", "\n".join(logs.output), family)
 
 

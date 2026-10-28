@@ -205,6 +205,13 @@ limit is `extent − m − (reach(w) − L)`. A family that this alone empties r
 `closed_reach_too_long`. The oracle above models the open hand only, which every closed
 template also satisfies; `tests/tsr/hands/test_closed_reach.py` checks the closed one.
 
+**A default margin scales with the object** (#195). When the caller passes no `clearance`,
+it is `clearance_fraction` of the depth the fingers can use: `min(L, r)` for the cylinder
+side, sphere and torus side, `min(L, extent)` for a box family (the box's extent along that
+family's approach), and `L` for the cylinder caps and the torus span. A supplied
+`clearance` is used exactly. Box templates record the margin they used, and its basis, in
+`provenance.metadata["margin"]` and `["margin_basis"]`.
+
 ### Tolerances and conventions (defined once)
 
 - Length tolerance is scale-aware: `atol = 1e-9 + 1e-6 · scale`, where `scale`
