@@ -1,165 +1,440 @@
 name: Release
 
-# Tag-driven release pipeline.
+# Tag-driven release pipeline. Every release publishes exactly the files that passed
+# verification: the sdist and wheel are built once, and the same bytes are verified,
+# uploaded, and attached to the GitHub release, with their hashes re-checked at every
+# hand-off. Nothing is rebuilt after verification. The recipe is docs/RELEASING.md.
 #
-# Tag patterns:
-#   v*rc*    -> build sdist + wheel, publish to TestPyPI (dry run)
-#   v*       -> build sdist + wheel, publish to real PyPI + GitHub Release
-#   (manual workflow_dispatch also builds + publishes to TestPyPI)
+#   1. build             unprivileged: the sdist and wheel, built once with the tag as the
+#                        version (hatch-vcs); the guards that the artifact is the tag's
+#                        version and that an rc tag builds a pre-release; SHA256SUMS and
+#                        manifest.json beside them, and SHA256SUMS's digest as an output
+#   2. verify            those files in clean environments: each installed alone, then the
+#                        test suite run against the installed package, never src/
+#   3. publish_testpypi  (rc tags; or dispatch with publish_testpypi) uploads them unchanged
+#   4. confirm_testpypi  TestPyPI serves every file with its built hash
+#   5. publish_pypi      (final tags only) uploads them unchanged
+#   6. confirm_pypi      PyPI serves every file with its built hash, and sstsr installed
+#                        from PyPI passes the test suite
+#   7. github_release    (final tags only) attaches the same files, SHA256SUMS, the manifest
+#                        and the verification report, then downloads them back and
+#                        confirms their hashes
 #
-# The version comes from the tag (hatch-vcs), so an rc tag necessarily builds an rc
-# artifact and TestPyPI always receives a pre-release. A guard re-checks that the
-# built artifact matches the tag before any publish job runs.
+# Every job after build re-checks the files against SHA256SUMS, and SHA256SUMS against the
+# digest build recorded, before it acts. Immediately before each upload and the release, a
+# step resolves the tag to the commit it points to now and stops unless that is this
+# run's commit, so a moved or deleted tag never publishes under its new target. A final
+# tag publishes to PyPI only after every verify job passed; TestPyPI only ever receives
+# pre-releases, so a final is not uploaded there.
 #
-# Auth: Trusted Publishing (PyPI / TestPyPI OIDC). No API tokens in CI.
-# The publish jobs run inside named GitHub environments (`release` /
-# `testpypi-release`) so the org's environment-protection rules apply.
+# workflow_dispatch builds and verifies only; it publishes its dev version to TestPyPI
+# only with publish_testpypi=true, and never to PyPI.
 #
-# sstsr is pure Python, so a single `uv build` produces both artifacts.
+# Auth: Trusted Publishing (PyPI / TestPyPI OIDC). No API tokens. The publish jobs run in
+# the GitHub environments `release` and `testpypi-release`, so environment-protection
+# rules apply. Only those two jobs hold id-token: write; only github_release holds
+# contents: write. Third-party actions are pinned to full commit SHAs.
 
 on:
   push:
     tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      publish_testpypi:
+        description: "Also publish the built dev version to TestPyPI"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
+# Two runs for one tag never overlap, and a running release is never cancelled. Each
+# dispatch run has its own group.
+concurrency:
+  group: release-${{ github.event_name == 'push' && github.ref || github.run_id }}
+  cancel-in-progress: false
+
 jobs:
   build:
-    name: Build sdist + wheel
+    name: Build the sdist and wheel once, with SHA256SUMS
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      kind: ${{ steps.version.outputs.kind }}
+      sums_sha256: ${{ steps.gather.outputs.sums_sha256 }}
+    env:
+      TAG: ${{ github.event_name == 'push' && github.ref_type == 'tag' && github.ref_name || '' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0
-
-      - name: Set up uv
-        uses: astral-sh/setup-uv@v5
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
 
       # When building from a tag, the tag IS the version. `git describe` has to choose
-      # when several tags point at one commit -- the normal rc -> final flow, since the
-      # release usually sits on the same commit as its candidate -- and it resolved to
-      # the rc in CI while resolving to the final tag locally, so the version is pinned
-      # from the ref rather than inferred.
-      #
-      # It must be the GENERIC setuptools-scm variable: hatch-vcs does not pass the
-      # distribution name through, so the per-distribution
-      # SETUPTOOLS_SCM_PRETEND_VERSION_FOR_SSTSR form is silently ignored. Verified by
-      # building with each set to 9.9.9: the per-dist form produced 2.3.0 (from
-      # describe), the generic form produced 9.9.9.
+      # when several tags point at one commit -- the normal rc -> final flow -- and it
+      # resolved to the rc in CI while resolving to the final tag locally, so the version
+      # is pinned from the ref. It must be the GENERIC setuptools-scm variable: hatch-vcs
+      # does not pass the distribution name through, so the per-distribution
+      # SETUPTOOLS_SCM_PRETEND_VERSION_FOR_SSTSR form is silently ignored.
       - name: Build
         run: |
           set -euo pipefail
-          case "${GITHUB_REF}" in
-            refs/tags/v*)
-              export SETUPTOOLS_SCM_PRETEND_VERSION="${GITHUB_REF_NAME#v}"
-              echo "building tag ${GITHUB_REF_NAME} as version ${SETUPTOOLS_SCM_PRETEND_VERSION}"
-              ;;
-          esac
-          uv build
+          if [ -n "$TAG" ]; then
+            export SETUPTOOLS_SCM_PRETEND_VERSION="${TAG#v}"
+            echo "building tag $TAG as version $SETUPTOOLS_SCM_PRETEND_VERSION"
+          fi
+          uv build --out-dir release/dist
+          rm release/dist/.gitignore  # uv marks its output git-ignored; only distributions ship
 
       - name: Check metadata
-        run: uvx twine check dist/*
+        run: uvx twine@6.1.0 check --strict release/dist/*
 
-      # The version is derived from the tag, so a mismatch means the tag was not
-      # what was built (dirty tree, shallow clone, wrong ref). Fail before publishing.
-      - name: Tag matches artifact version
-        if: startsWith(github.ref, 'refs/tags/v')
+      # The artifacts must be one wheel and one sdist of the tag's version; an rc tag must
+      # build a pre-release, and a final tag a final.
+      - id: version
         run: |
           set -euo pipefail
-          tag="${GITHUB_REF_NAME#v}"
-          artifact="$(basename "$(ls dist/*.whl)" | cut -d- -f2)"
-          echo "tag=$tag artifact=$artifact"
-          if [ "$tag" != "$artifact" ]; then
-            echo "::error::tag $tag does not match built version $artifact"
-            exit 1
+          wheels=(release/dist/*.whl); sdists=(release/dist/*.tar.gz)
+          [ "$(find release/dist -mindepth 1 -maxdepth 1 | wc -l)" -eq 2 ] && [ -f "${wheels[0]}" ] && [ -f "${sdists[0]}" ] \
+            || { echo "::error::expected exactly one wheel and one sdist"; exit 1; }
+          version="$(basename "${wheels[0]}" | cut -d- -f2)"
+          [ "$(basename "${sdists[0]}")" = "sstsr-$version.tar.gz" ] \
+            || { echo "::error::the sdist is not sstsr-$version"; exit 1; }
+          if [ -z "$TAG" ]; then
+            kind=untagged
+          elif [ "${TAG#v}" != "$version" ]; then
+            echo "::error::tag $TAG does not match built version $version"; exit 1
+          else
+            case "$version" in
+              *dev*) echo "::error::tag $TAG built dev version $version"; exit 1 ;;
+              *rc*) kind=rc ;;
+              *) kind=final ;;
+            esac
           fi
+          echo "version=$version kind=$kind"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "kind=$kind" >> "$GITHUB_OUTPUT"
 
-      # TestPyPI must only ever receive pre-releases, and PyPI only finals. The step
-      # above already tied the artifact to the tag, so checking the tag is enough.
-      - name: Tag kind matches its destination
+      - id: gather
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          KIND: ${{ steps.version.outputs.kind }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        working-directory: release
         run: |
           set -euo pipefail
-          artifact="$(basename "$(ls dist/*.whl)" | cut -d- -f2)"
-          case "${GITHUB_REF_NAME}" in
-            *rc*)
-              case "$artifact" in
-                *rc*) ;;
-                *) echo "::error::rc tag ${GITHUB_REF_NAME} built a final artifact $artifact"; exit 1 ;;
-              esac ;;
-            v*)
-              case "$artifact" in
-                *rc*|*dev*) echo "::error::final tag ${GITHUB_REF_NAME} built pre-release $artifact"; exit 1 ;;
-              esac ;;
-          esac
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+          (cd dist && sha256sum -- * | LC_ALL=C sort -k2) > SHA256SUMS
+          python3 -I - <<'PY'
+          import json, os
+          files = [dict(zip(("sha256", "name"), line.split())) for line in open("SHA256SUMS")]
+          manifest = {k.lower(): os.environ[k] for k in ("VERSION", "KIND", "TAG", "RUN_URL")}
+          manifest.update(commit=os.environ["GITHUB_SHA"], files=files)
+          json.dump(manifest, open("manifest.json", "w"), indent=2)
+          PY
+          echo "sums_sha256=$(sha256sum SHA256SUMS | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+          { echo '### SHA256SUMS'; echo '```'; cat SHA256SUMS; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: dist
-          path: dist/*
+          name: release-dist
+          path: release/
+          if-no-files-found: error
+
+  verify:
+    name: Verify the ${{ matrix.install }} (${{ matrix.os }}, Python ${{ matrix.python }})
+    needs: build
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {os: ubuntu-latest, python: "3.10", install: wheel}
+          - {os: ubuntu-latest, python: "3.14", install: wheel}
+          - {os: ubuntu-latest, python: "3.12", install: sdist}
+          - {os: macos-latest, python: "3.12", install: wheel}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: release-dist
+          path: release
+      - name: Re-check the files against SHA256SUMS, and SHA256SUMS against build's digest
+        env:
+          SUMS_SHA256: ${{ needs.build.outputs.sums_sha256 }}
+        working-directory: release
+        run: |
+          echo "$SUMS_SHA256  SHA256SUMS" | shasum -a 256 -c -
+          (cd dist && shasum -a 256 -c ../SHA256SUMS)
+          diff <(cd dist && find . -mindepth 1 -maxdepth 1 | sed 's|^\./||' | LC_ALL=C sort) <(awk '{print $2}' SHA256SUMS | LC_ALL=C sort)
+      # The checkout supplies only the tests. src/ is never on the path, so `tsr` is the
+      # installed artifact's, which the first check confirms.
+      - name: Install the ${{ matrix.install }} alone in a clean environment, and run the tests against it
+        env:
+          VERSION: ${{ needs.build.outputs.version }}
+          INSTALL: ${{ matrix.install }}
+          PY: ${{ matrix.python }}
+          LABEL: verify-${{ matrix.os }}-${{ matrix.python }}-${{ matrix.install }}
+        run: |
+          set -euo pipefail
+          case "$INSTALL" in wheel) file=(release/dist/*.whl) ;; sdist) file=(release/dist/*.tar.gz) ;; esac
+          uv venv --no-project --python "$PY" "$RUNNER_TEMP/clean"
+          python="$RUNNER_TEMP/clean/bin/python"
+          uv pip install --python "$python" "sstsr[test,viser] @ file://$PWD/${file[0]}"
+          "$python" -I -c "
+          import sysconfig, tsr
+          assert tsr.__version__ == '$VERSION', tsr.__version__
+          assert tsr.__file__.startswith(sysconfig.get_paths()['purelib']), tsr.__file__
+          print(tsr.__version__, tsr.__file__)"
+          mkdir -p reports
+          "$python" -m pytest tests -q -p no:cacheprovider --junitxml "reports/$LABEL.xml"
+          "$python" -I - "${file[0]}" "reports/$LABEL.xml" > "reports/$LABEL.json" <<'PY'
+          import hashlib, json, os, platform, sys, xml.etree.ElementTree as ET
+          import tsr
+          path, junit = sys.argv[1], sys.argv[2]
+          cases = ET.parse(junit).getroot().iter("testcase")
+          ended = ("failure", "error", "skipped")
+          outcomes = [next((c.tag for c in case if c.tag in ended), "passed") for case in cases]
+          tests = {k: outcomes.count(k) for k in ("passed", "failure", "error", "skipped")}
+          print(json.dumps({
+              "label": os.environ["LABEL"],
+              "file": os.path.basename(path),
+              "sha256": hashlib.sha256(open(path, "rb").read()).hexdigest(),
+              "install": os.environ["INSTALL"],
+              "python": platform.python_version(),
+              "platform": platform.platform(),
+              "version": tsr.__version__,
+              "tests": {"run": len(outcomes), **tests},
+          }, indent=2))
+          PY
+          cat "reports/$LABEL.json"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: report-${{ matrix.os }}-${{ matrix.python }}-${{ matrix.install }}
+          path: reports/*.json
+          if-no-files-found: error
 
   publish_testpypi:
-    name: Publish → TestPyPI
-    needs: build
+    name: Publish to TestPyPI
+    needs: [build, verify]
     runs-on: ubuntu-latest
-    # RC tags (e.g. v2.0.0rc1) and manual triggers. The real PyPI job runs on
-    # non-RC v* tags only.
-    if: contains(github.ref, 'rc') || github.event_name == 'workflow_dispatch'
+    if: >-
+      needs.build.outputs.kind == 'rc' ||
+      (github.event_name == 'workflow_dispatch' && inputs.publish_testpypi)
     environment:
       name: testpypi-release
       url: https://test.pypi.org/p/sstsr
     permissions:
-      id-token: write  # Trusted Publishing OIDC
+      id-token: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          name: dist
-          path: dist
-
-      - name: Publish to TestPyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
+          name: release-dist
+          path: release
+      - name: Re-check the files against SHA256SUMS, and SHA256SUMS against build's digest
+        env:
+          SUMS_SHA256: ${{ needs.build.outputs.sums_sha256 }}
+        working-directory: release
+        run: |
+          echo "$SUMS_SHA256  SHA256SUMS" | shasum -a 256 -c -
+          (cd dist && shasum -a 256 -c ../SHA256SUMS)
+          diff <(cd dist && find . -mindepth 1 -maxdepth 1 | sed 's|^\./||' | LC_ALL=C sort) <(awk '{print $2}' SHA256SUMS | LC_ALL=C sort)
+      - name: The tag still points to this run's commit (a moved or deleted tag stops the run)
+        if: needs.build.outputs.kind != 'untagged'
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          # Annotated tags list their commit as refs/tags/TAG^{}; lightweight tags only as refs/tags/TAG.
+          refs="$(git ls-remote --tags "https://github.com/$GITHUB_REPOSITORY" "refs/tags/$TAG" "refs/tags/$TAG^{}")"
+          target="$(printf '%s\n' "$refs" | awk -v ref="refs/tags/$TAG^{}" '$2 == ref {print $1}')"
+          [ -n "$target" ] || target="$(printf '%s\n' "$refs" | awk -v ref="refs/tags/$TAG" '$2 == ref {print $1}')"
+          if [ "$target" != "$GITHUB_SHA" ]; then
+            echo "::error::tag $TAG now points to ${target:-nothing}, not this run's commit $GITHUB_SHA"
+            exit 1
+          fi
+          echo "tag $TAG still points to $GITHUB_SHA"
+      - uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3
         with:
           repository-url: https://test.pypi.org/legacy/
+          packages-dir: release/dist/
+
+  confirm_testpypi:
+    name: TestPyPI serves the built bytes
+    needs: [build, publish_testpypi]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: release-dist
+          path: release
+      - name: Download every file from TestPyPI and confirm its hash
+        env:
+          VERSION: ${{ needs.build.outputs.version }}
+          SUMS_SHA256: ${{ needs.build.outputs.sums_sha256 }}
+        run: |
+          echo "$SUMS_SHA256  release/SHA256SUMS" | shasum -a 256 -c -
+          python3 -I tools/release_index.py https://test.pypi.org --version "$VERSION" --sums release/SHA256SUMS
 
   publish_pypi:
-    name: Publish → PyPI
-    needs: build
+    name: Publish to PyPI
+    needs: [build, verify]
     runs-on: ubuntu-latest
-    # Real PyPI: only on v* tags that DON'T contain 'rc' (e.g. v2.0.0).
-    if: startsWith(github.ref, 'refs/tags/v') && !contains(github.ref, 'rc')
+    if: needs.build.outputs.kind == 'final' && github.event_name == 'push'
     environment:
       name: release
       url: https://pypi.org/p/sstsr
     permissions:
       id-token: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          name: dist
-          path: dist
+          name: release-dist
+          path: release
+      - name: Re-check the files against SHA256SUMS, and SHA256SUMS against build's digest
+        env:
+          SUMS_SHA256: ${{ needs.build.outputs.sums_sha256 }}
+        working-directory: release
+        run: |
+          echo "$SUMS_SHA256  SHA256SUMS" | shasum -a 256 -c -
+          (cd dist && shasum -a 256 -c ../SHA256SUMS)
+          diff <(cd dist && find . -mindepth 1 -maxdepth 1 | sed 's|^\./||' | LC_ALL=C sort) <(awk '{print $2}' SHA256SUMS | LC_ALL=C sort)
+      - name: The tag still points to this run's commit (a moved or deleted tag stops the run)
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          # Annotated tags list their commit as refs/tags/TAG^{}; lightweight tags only as refs/tags/TAG.
+          refs="$(git ls-remote --tags "https://github.com/$GITHUB_REPOSITORY" "refs/tags/$TAG" "refs/tags/$TAG^{}")"
+          target="$(printf '%s\n' "$refs" | awk -v ref="refs/tags/$TAG^{}" '$2 == ref {print $1}')"
+          [ -n "$target" ] || target="$(printf '%s\n' "$refs" | awk -v ref="refs/tags/$TAG" '$2 == ref {print $1}')"
+          if [ "$target" != "$GITHUB_SHA" ]; then
+            echo "::error::tag $TAG now points to ${target:-nothing}, not this run's commit $GITHUB_SHA"
+            exit 1
+          fi
+          echo "tag $TAG still points to $GITHUB_SHA"
+      - uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3
+        with:
+          packages-dir: release/dist/
 
-      - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
+  confirm_pypi:
+    name: PyPI serves the built bytes, and sstsr from PyPI passes the tests
+    needs: [build, publish_pypi]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: release-dist
+          path: release
+      - name: Download every file from PyPI and confirm its hash
+        env:
+          VERSION: ${{ needs.build.outputs.version }}
+          SUMS_SHA256: ${{ needs.build.outputs.sums_sha256 }}
+        run: |
+          echo "$SUMS_SHA256  release/SHA256SUMS" | shasum -a 256 -c -
+          python3 -I tools/release_index.py https://pypi.org --version "$VERSION" --sums release/SHA256SUMS
+      - name: Install sstsr from PyPI in a clean environment, and run the tests against it
+        env:
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          set -euo pipefail
+          uv venv --no-project --python 3.12 "$RUNNER_TEMP/clean"
+          python="$RUNNER_TEMP/clean/bin/python"
+          uv pip install --python "$python" --no-cache --index-url https://pypi.org/simple/ "sstsr[test,viser]==$VERSION"
+          "$python" -I -c "import tsr; assert tsr.__version__ == '$VERSION', tsr.__version__"
+          "$python" -m pytest tests -q -p no:cacheprovider
 
   github_release:
-    name: Create GitHub Release
-    needs: publish_pypi
+    name: GitHub release with the same files, SHA256SUMS and verification report
+    needs: [build, confirm_pypi]
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v') && !contains(github.ref, 'rc')
+    if: needs.build.outputs.kind == 'final' && github.event_name == 'push'
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
-          fetch-depth: 0
-
-      - name: Create Release
-        uses: softprops/action-gh-release@v2
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          tag_name: ${{ github.ref_name }}
-          name: sstsr ${{ github.ref_name }}
-          generate_release_notes: true
-          draft: false
-          prerelease: false
+          name: release-dist
+          path: release
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: report-*
+          path: reports
+          merge-multiple: true
+      - name: Re-check the files against SHA256SUMS, and SHA256SUMS against build's digest
+        env:
+          SUMS_SHA256: ${{ needs.build.outputs.sums_sha256 }}
+        working-directory: release
+        run: |
+          echo "$SUMS_SHA256  SHA256SUMS" | shasum -a 256 -c -
+          (cd dist && shasum -a 256 -c ../SHA256SUMS)
+          diff <(cd dist && find . -mindepth 1 -maxdepth 1 | sed 's|^\./||' | LC_ALL=C sort) <(awk '{print $2}' SHA256SUMS | LC_ALL=C sort)
+      - name: One verification report, from the manifest and every clean-environment check
+        run: |
+          python3 -I - <<'PY'
+          import glob, json
+          verify = [json.load(open(p)) for p in sorted(glob.glob("reports/*.json"))]
+          manifest = json.load(open("release/manifest.json"))
+          built = {f["name"]: f["sha256"] for f in manifest["files"]}
+          for report in verify:
+              assert built[report["file"]] == report["sha256"], report
+              tests = report["tests"]
+              assert tests["run"] > 0 and tests["failure"] == tests["error"] == 0, report
+          report = {"manifest": manifest, "verify": verify}
+          json.dump(report, open("release/verification.json", "w"), indent=2)
+          PY
+      - name: Extract this version's CHANGELOG section
+        env:
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          python3 -I - "$VERSION" <<'PY' > notes.md
+          import re, sys, pathlib
+          version = sys.argv[1]
+          text = pathlib.Path("CHANGELOG.md").read_text()
+          m = re.search(rf"^## \[{re.escape(version)}\][^\n]*\n(.*?)(?=^## \[|\Z)", text, re.S | re.M)
+          if not m:
+              sys.exit(f"CHANGELOG.md has no section for {version}")
+          print(m.group(1).strip())
+          PY
+          test -s notes.md
+      - name: The tag still points to this run's commit (a moved or deleted tag stops the run)
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          # Annotated tags list their commit as refs/tags/TAG^{}; lightweight tags only as refs/tags/TAG.
+          refs="$(git ls-remote --tags "https://github.com/$GITHUB_REPOSITORY" "refs/tags/$TAG" "refs/tags/$TAG^{}")"
+          target="$(printf '%s\n' "$refs" | awk -v ref="refs/tags/$TAG^{}" '$2 == ref {print $1}')"
+          [ -n "$target" ] || target="$(printf '%s\n' "$refs" | awk -v ref="refs/tags/$TAG" '$2 == ref {print $1}')"
+          if [ "$target" != "$GITHUB_SHA" ]; then
+            echo "::error::tag $TAG now points to ${target:-nothing}, not this run's commit $GITHUB_SHA"
+            exit 1
+          fi
+          echo "tag $TAG still points to $GITHUB_SHA"
+      - name: Create the release with the files, SHA256SUMS, manifest and verification report
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag --title "sstsr $TAG" \
+            --notes-file notes.md \
+            release/dist/* release/SHA256SUMS release/manifest.json release/verification.json
+      - name: The release serves the built bytes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          mkdir attached
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --dir attached --pattern 'sstsr-*' --pattern SHA256SUMS
+          cmp attached/SHA256SUMS release/SHA256SUMS
+          (cd attached && shasum -a 256 -c SHA256SUMS)
+          diff <(cd attached && find . -mindepth 1 -maxdepth 1 ! -name SHA256SUMS | sed 's|^\./||' | LC_ALL=C sort) <(awk '{print $2}' release/SHA256SUMS | LC_ALL=C sort)
