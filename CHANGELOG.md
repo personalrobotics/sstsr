@@ -103,6 +103,13 @@ accept any radius their aperture allowed.
   `test_reproduction_retains_span_x` certified its box at the old default and now uses the
   new one.
 
+### Release
+- **Each release publishes the one artifact set that passed verification.** The sdist
+  and wheel are built once, installed alone in clean environments and tested there, then
+  uploaded unchanged; PyPI's and TestPyPI's copies are confirmed by hash. The GitHub
+  release attaches the same files with `SHA256SUMS`, a manifest, and the verification
+  report. Workflow actions are pinned to commit SHAs (docs/RELEASING.md).
+
 ## [4.0.0] — 2026-10
 
 `TSR.contains` no longer accepts poses up to 1 mm (and 1 mrad) outside a region, and

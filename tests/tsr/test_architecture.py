@@ -76,8 +76,9 @@ def test_viser_backend_is_not_reachable_from_the_public_api():
 
 
 def _pyproject_table(header: str) -> str:
-    """One pyproject table as raw text (``tomllib`` is stdlib only from 3.11)."""
-    text = (Path(tsr.__file__).parent.parent.parent / "pyproject.toml").read_text()
+    """One pyproject table as raw text (``tomllib`` is stdlib only from 3.11). It is
+    found from this file, not from ``tsr``, which may be an installed artifact's."""
+    text = (Path(__file__).resolve().parents[2] / "pyproject.toml").read_text()
     rest = text[text.index(f"[{header}]") + len(header) + 2 :]
     return rest[: rest.index("\n[")]
 
