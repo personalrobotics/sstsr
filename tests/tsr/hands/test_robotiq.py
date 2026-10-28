@@ -28,8 +28,9 @@ class TestRobotiq2F140(unittest.TestCase):
     def test_outputs_canonical_frames(self):
         # Robotiq2F140 now outputs canonical TSR EE poses (no frame correction).
         # It should produce identical Tw_e as a plain ParallelJawGripper with
-        # the same hardware parameters.
+        # the same hardware parameters, its closed reach among them (#193).
         base = ParallelJawGripper(finger_length=0.114, max_aperture=0.128)
+        base.CLOSED_REACH = Robotiq2F140.CLOSED_REACH
         t_base = base.grasp_cylinder_side(0.040, 0.10)
         t_robotiq = self.gripper.grasp_cylinder_side(0.040, 0.10)
 

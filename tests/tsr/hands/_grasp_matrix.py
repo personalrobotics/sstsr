@@ -765,7 +765,9 @@ _CORPUS_DIMS = {
     "sphere": {"object_radius": 0.02},
     "cylinder": {"cylinder_radius": 0.02, "cylinder_height": 0.12},
     "box": {"box_x": 0.05, "box_y": 0.04, "box_z": 0.06},
-    "torus": {"torus_radius": 0.03, "tube_radius": 0.01},
+    # A tube thick enough that the 2F-85's fingertips, closed across it, stay inside its far
+    # side (#193), on a ring small enough that its outer diameter still fits the 2F-85.
+    "torus": {"torus_radius": 0.022, "tube_radius": 0.018},
 }
 
 

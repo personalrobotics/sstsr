@@ -659,7 +659,8 @@ def studio(
     Pick a primitive, drag its dimensions and the gripper's, choose a factory, and the
     templates are regenerated and redrawn on every change. When a request yields
     nothing, the factories' own diagnostic is shown -- ``cannot_straddle``,
-    ``finger_too_short``, ``insufficient_clearance_band`` -- so an empty scene explains
+    ``finger_too_short``, ``insufficient_clearance_band``, ``closed_reach_too_long`` -- so
+    an empty scene explains
     itself rather than leaving you guessing.
 
     This is a debugging tool, not evidence: what it draws is the generator's claim, and

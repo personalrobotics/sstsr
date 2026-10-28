@@ -140,13 +140,21 @@ class TestCoverageAndUniqueness(unittest.TestCase):
         # A comfortably feasible regime: a cube-ish object well inside reach and aperture.
         A, L = case.gripper.max_aperture, case.gripper.finger_length
         size = min(A / 3.0, L / 2.0)
+        clearance = size / 50
+        # A linkage hand's fingertips reach further once closed (#193), and a radial grasp
+        # keeps them inside the far side: comfortable means a radius beyond that gain. The
+        # torus ring is then as small as keeps it a torus, so its span still fits.
+        g = case.gripper.build()
+        gain = max(g.reach(w) for w in np.linspace(0.0, A, 65)) - L
+        r = max(size / 2, gain + 2 * clearance)
+        tube = max(size / 4, gain + 2 * clearance)
         dims = {
-            "sphere": {"object_radius": size / 2},
-            "cylinder": {"cylinder_radius": size / 2, "cylinder_height": 2 * size},
+            "sphere": {"object_radius": r},
+            "cylinder": {"cylinder_radius": r, "cylinder_height": 2 * size},
             "box": {"box_x": size, "box_y": size, "box_z": size},
-            "torus": {"torus_radius": size, "tube_radius": size / 4},
+            "torus": {"torus_radius": size if gain == 0.0 else 1.25 * tube, "tube_radius": tube},
         }[case.spec.primitive]
-        comfortable = case.replace(dims=dims, options={"k": k, "clearance": size / 50})
+        comfortable = case.replace(dims=dims, options={"k": k, "clearance": clearance})
         self.assertEqual(coverage_failures(comfortable, comfortable.run()), [], comfortable)
 
 
