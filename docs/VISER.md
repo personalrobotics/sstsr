@@ -133,6 +133,7 @@ shows it, so you see *why* rather than an unexplained void:
 | object wider than the jaws | `exceeds_aperture; preshape=0.084, diameter=0.08, max_aperture=0.05` |
 | fingers shorter than the radius | `finger_too_short; finger_length=0.02, radius=0.06` |
 | clearance larger than the band | `insufficient_clearance_band; clearance=0.05, finger_length=0.08` |
+| a linkage hand's closed fingertips would pass the far face | `closed_reach_too_long; box_x=0.072, box_y=0.088, clearance=0.0114, max_aperture=0.128` |
 | a negative dimension | `invalid request: cylinder_radius must be a finite positive number` |
 
 That last row is a different failure from the others, and the studio keeps them apart:

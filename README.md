@@ -97,6 +97,11 @@ point for that measurement is listed explicitly (they are not interchangeable).
 | `Robotiq2F85` | 59 mm | 85 mm | palm (housing forward edge) → pad tip |
 | `FrankaHand` | 37 mm | 80 mm | palm (hand-body forward edge) → pad tip |
 
+`finger_length` is the reach with the hand **open**. The two Robotiq hands are four-bar
+linkages whose pads swing forward as they close, so each also declares its measured reach
+closed to a width, `gripper.reach(width)` — 132 mm for the 2F-140 closed on 72 mm — and its
+templates keep the closed fingertips inside the object as well as the open ones.
+
 ```python
 import numpy as np
 from tsr.hands import ParallelJawGripper, Robotiq2F85, Robotiq2F140, FrankaHand

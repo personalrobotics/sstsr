@@ -4,6 +4,77 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+The Robotiq hands' fingertips reach further as they close, and their grasp templates now
+allow for it (#193). Both are four-bar hands whose pads swing forward on closing: the 2F-140
+closed on a 72 mm object reaches about 132 mm past the palm, not its open `FINGER_LENGTH` of
+114 mm. A template that kept the *open* fingertips a clearance inside an object's far face
+could drive the *closed* ones through it — into the table, for a top grasp of a short box.
+That is what Geodude's lifts were starting in collision with: a top grasp of `gelatin_box`
+(72 × 88 × 28 mm) closed across 72 mm puts the fingertips about 18 mm further down, into
+the worktop.
+
+Minor rather than patch: there is a new API, and **the 2F-140's and 2F-85's templates
+change**. `FrankaHand` and every `ParallelJawGripper` built from dimensions are unchanged:
+they declare no curve, so their reach is `finger_length` at every width, as before. Pin
+`sstsr>=4.1` if you rely on Robotiq templates keeping their closed fingertips inside the
+object.
+
+**What changes for the Robotiq hands.** Only the deep end of a depth band, and only where it
+faces the far side of what the fingers span: it moves shallower by `reach(span) −
+finger_length`. Shallow depths, palm limits, slide bands, preshapes and frames do not move.
+For `Robotiq2F140()` at its default clearance (11.4 mm for a box, 3.3 mm for this cylinder):
+
+| call | before | after |
+|---|---|---|
+| `grasp_box_top(0.072, 0.088, 0.028)` | 6 templates, depths 11.4–16.6 mm | none: `closed_reach_too_long` |
+| `grasp_box_top(0.158, 0.028, 0.084)` | 3, depths 11.4 / 42.0 / 72.6 mm | 3, depths 11.4 / 30.3 / 49.1 mm |
+| `grasp_cylinder_side(0.033, 0.123)` | 6, depths 33.0 / 47.9 / 62.7 mm | 6, depths 33.0 / 38.5 / 44.0 mm |
+
+The gelatin box still has top grasps at a smaller clearance — up to 5.2 mm across its 72 mm,
+7.0 mm across its 88 mm — which is the consumer's choice to make. Radial grasps need a radius beyond the closed-reach gain: with
+default clearance the 2F-140 side-grasps cylinders and spheres from 24 mm radius, the 2F-85
+from 15 mm, where both used to accept any radius their aperture allowed.
+
+### Added
+- **`ParallelJawGripper.reach(width)`** (#193): how far the fingertips reach past the palm
+  along the approach, closed to `width` — the gap between the pads' contact faces, the same
+  quantity as `max_aperture` and a template's span. It is `finger_length` unless the hand
+  declares a measured curve as **`CLOSED_REACH`**, which it interpolates linearly, holds at
+  its ends outside the measured widths, and never lets fall below `finger_length`.
+- **`Robotiq2F140.CLOSED_REACH` and `Robotiq2F85.CLOSED_REACH`**, measured from geodude_assets
+  `2f140.xml` (395991d) and mujoco_menagerie `robotiq_2f85/2f85.xml` (feadf76) under MuJoCo
+  3.14.0. Fully open each reads its own `MAX_APERTURE` and `FINGER_LENGTH` back, to within
+  0.4 mm. The curves are the models'; neither has been checked against Robotiq's drawings.
+- **`tools/finger_reach.py`**, which measures such a curve from a hand's MJCF, so the numbers
+  above can be regenerated rather than trusted.
+- **A new empty-set reason, `closed_reach_too_long`**: the open hand fits, and only the
+  closed fingertips would pass the far face. `insufficient_clearance_band` keeps its meaning,
+  an empty band for the open hand.
+
+### Changed
+- **Every depth limit that faces the far side of what the fingers span holds for the closed
+  fingertips too** (#193): it is `extent − m − (reach(span) − finger_length)` rather than
+  `extent − m`. That covers box top, bottom and both face families (`span` is the box
+  dimension the fingers close across), cylinder top, bottom and side (`span` is the
+  diameter), and the sphere and torus side, whose radial band has the same far-surface limit
+  as the cylinder side. The torus span grasp is unchanged: its fingers pass outside the
+  ring, so no far face bounds its depth.
+- **A box family emptied in different ways per orientation reports the one nearest to
+  feasible**: `closed_reach_too_long`, then `cannot_straddle`, then
+  `insufficient_clearance_band`. Before, any orientation with a slide band read as
+  `cannot_straddle`.
+- **Tests.** A property test checks, from the poses alone and for each named hand over a grid
+  of boxes, cylinders and spheres, that the palm stays a clearance outside the near face and
+  the fingertips a clearance inside the far face, open and closed
+  (`tests/tsr/hands/test_closed_reach.py`). Three existing tests were sized for a prismatic
+  jaw: `test_outputs_canonical_frames` compares the 2F-140 with a plain jaw that now carries
+  the same curve, the comfortable regime in `test_declared_families_are_all_emitted` grows a
+  radial object's radius past a linkage hand's closed-reach gain, and the mutation-gate
+  corpus's torus is 22 mm / 18 mm instead of 30 mm / 10 mm, so the 2F-85 can still side-grasp
+  its tube.
+
 ## [4.0.0] — 2026-10
 
 `TSR.contains` no longer accepts poses up to 1 mm (and 1 mrad) outside a region, and
