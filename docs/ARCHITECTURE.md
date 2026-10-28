@@ -127,9 +127,9 @@ Every `grasp_*` / `place_*` factory method obeys one uniform contract:
   objects without `try`/`except`.
 - **Observability:** infeasibility carries a machine-readable reason
   (`exceeds_aperture`, `cannot_straddle`, `insufficient_clearance_band`,
-  `finger_too_short`). The *public* factory method emits a single
-  `logger.debug` at its boundary (not at each internal early return), so an empty
-  result is diagnosable without turning it into an exception. If debug logs prove
+  `finger_too_short`, `closed_reach_too_long`). The *public* factory method emits a
+  single `logger.debug` at its boundary (not at each internal early return), so an
+  empty result is diagnosable without turning it into an exception. If debug logs prove
   insufficient, add an explicit diagnostic-result API — exceptions do not carry
   that responsibility.
 - Templates carry `task` / `subject` / `reference` metadata and the canonical
@@ -195,6 +195,22 @@ preshape `a`, clearance `c`, and **every** pose admitted by a returned template:
 
 This describes a viable *pre-grasp*. It is **not** a claim of dynamic stability
 or force closure under arbitrary friction — an explicit non-goal.
+
+**Closing must not undo it** (#193). A linkage hand's pads swing forward as it closes,
+so closed on a span `w` its fingertips reach `ParallelJawGripper.reach(w) ≥ L` past the
+palm. Wherever a depth limit faces the far side of what the fingers span — the box top,
+bottom and face bands, the cylinder caps and side, the sphere, the torus side — the
+fingertips stay the promised margin inside that far side closed as well as open: the
+limit is `extent − m − (reach(w) − L)`. A family that this alone empties reports
+`closed_reach_too_long`. The oracle above models the open hand only, which every closed
+template also satisfies; `tests/tsr/hands/test_closed_reach.py` checks the closed one.
+
+**A default margin scales with the object** (#195). When the caller passes no `clearance`,
+it is `clearance_fraction` of the depth the fingers can use: `min(L, r)` for the cylinder
+side, sphere and torus side, `min(L, extent)` for a box family (the box's extent along that
+family's approach), and `L` for the cylinder caps and the torus span. A supplied
+`clearance` is used exactly. Box templates record the margin they used, and its basis, in
+`provenance.metadata["margin"]` and `["margin_basis"]`.
 
 ### Tolerances and conventions (defined once)
 

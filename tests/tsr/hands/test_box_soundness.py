@@ -66,7 +66,8 @@ class TestThinBoxRetainsOrientation(unittest.TestCase):
         self.assertTrue(templates)
         orientations = {t.provenance.finger_orientation for t in templates}
         self.assertEqual(orientations, {"x"})  # only the span-x orientation survives
-        _assert_all_sound(self, Box(0.003, 0.060, 0.050), templates, g, 0.1 * 0.055)
+        # The default margin is 10% of min(finger_length, box_z), the extent approached (#195).
+        _assert_all_sound(self, Box(0.003, 0.060, 0.050), templates, g, 0.1 * min(0.055, 0.050))
 
     def test_thin_dimension_removes_only_dependent_orientation(self):
         # For a box top grasp, a thin box_x removes span-y (slides in x); a thin box_y

@@ -217,6 +217,10 @@ class GripperBase(ABC):
           pose stops the fingertips ``m`` short of the **bottom** face, and the palm
           can stay much farther than ``m`` above the approached rim.
 
+        A hand whose fingertips reach further once closed (``ParallelJawGripper.reach``)
+        moves the far-cap limit up by that much, so the closed fingertips stop ``m``
+        short of the bottom face too (#193).
+
         Args:
             cylinder_radius: Cylinder radius [m].
             cylinder_height: Cylinder height [m] (z of top face); also bounds the
@@ -261,6 +265,10 @@ class GripperBase(ABC):
         * ``cylinder_height < finger_length`` — the far-cap limit binds: the deepest
           pose stops the fingertips ``m`` short of the **top** face, and the palm can
           stay much farther than ``m`` below the approached rim.
+
+        A hand whose fingertips reach further once closed (``ParallelJawGripper.reach``)
+        moves the far-cap limit down by that much, so the closed fingertips stop ``m``
+        short of the top face too (#193).
 
         Args:
             cylinder_radius: Cylinder radius [m].
@@ -307,7 +315,8 @@ class GripperBase(ABC):
             box_z:     Box height [m] (along z-axis; top face at z=box_z).
             preshape:  Jaw opening [m]. Defaults to max_aperture / 2.
             k:         Number of discrete approach depths per face (default 3).
-            clearance: Safety buffer [m]. Defaults to 10% of finger_length.
+            clearance: Safety buffer [m]. Defaults to 10% of min(finger_length,
+                       the box's extent along the approach) (#195).
             subject:   Label for the end-effector entity.
             reference: Label for the reference object.
 
@@ -353,7 +362,8 @@ class GripperBase(ABC):
             box_z:     Box height [m] (z of top face).
             preshape:  Jaw opening [m]. Defaults to max_aperture / 2.
             k:         Number of discrete approach depths (default 3).
-            clearance: Safety buffer [m]. Defaults to 10% of finger_length.
+            clearance: Safety buffer [m]. Defaults to 10% of min(finger_length,
+                       the box's extent along the approach) (#195).
 
         Returns:
             List of k TSRTemplates.
@@ -384,11 +394,13 @@ class GripperBase(ABC):
             box_y:     Box depth  [m].
             box_z:     Box height [m]; bounds the insertion depth,
                        ``d ∈ [m, min(finger_length, box_z) − m]`` with the edge margin
-                       ``m = max(clearance, 2 · atol(scale))`` (#121). The TSR origin
-                       is the bottom face at z = 0.
+                       ``m = max(clearance, 2 · atol(scale))`` (#121), less how much
+                       further the fingertips reach once closed on the span (#193).
+                       The TSR origin is the bottom face at z = 0.
             preshape:  Jaw opening [m]. Defaults to max_aperture / 2.
             k:         Number of discrete approach depths (default 3).
-            clearance: Safety buffer [m]. Defaults to 10% of finger_length.
+            clearance: Safety buffer [m]. Defaults to 10% of min(finger_length,
+                       the box's extent along the approach) (#195).
 
         Returns:
             List of k TSRTemplates.
@@ -420,7 +432,8 @@ class GripperBase(ABC):
             box_z:     Box height [m].
             preshape:  Jaw opening [m]. Defaults to max_aperture / 2.
             k:         Number of discrete approach depths per face (default 3).
-            clearance: Safety buffer [m]. Defaults to 10% of finger_length.
+            clearance: Safety buffer [m]. Defaults to 10% of min(finger_length,
+                       the box's extent along the approach) (#195).
 
         Returns:
             List of 2*k TSRTemplates (k for +x face, k for -x face).
@@ -452,7 +465,8 @@ class GripperBase(ABC):
             box_z:     Box height [m].
             preshape:  Jaw opening [m]. Defaults to max_aperture / 2.
             k:         Number of discrete approach depths per face (default 3).
-            clearance: Safety buffer [m]. Defaults to 10% of finger_length.
+            clearance: Safety buffer [m]. Defaults to 10% of min(finger_length,
+                       the box's extent along the approach) (#195).
 
         Returns:
             List of 2*k TSRTemplates (k for +y face, k for -y face).
@@ -617,8 +631,9 @@ class GripperBase(ABC):
 
         Returns:
             List of 2*k*n_minor TSRTemplates. Empty (``finger_too_short`` /
-            ``insufficient_clearance_band``) if the fingers cannot reach the tube with
-            clearance, or the straddle reason if the tube diameter cannot be spanned.
+            ``insufficient_clearance_band`` / ``closed_reach_too_long``) if the fingers
+            cannot reach the tube with clearance, open or closed, or the straddle reason
+            if the tube diameter cannot be spanned.
         """
         raise NotImplementedError(f"{type(self).__name__} does not implement grasp_torus_side")
 
