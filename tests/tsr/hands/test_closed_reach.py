@@ -22,9 +22,9 @@ import unittest
 
 import numpy as np
 
-from tsr.hands import FrankaHand, ParallelJawGripper, Robotiq2F85, Robotiq2F140
+from tsr.hands import FrankaHand, KinovaJaco2TwoFinger, ParallelJawGripper, Robotiq2F85, Robotiq2F140
 
-HANDS = (Robotiq2F140(), Robotiq2F85(), FrankaHand())
+HANDS = (Robotiq2F140(), Robotiq2F85(), FrankaHand(), KinovaJaco2TwoFinger())
 CLEARANCES = (0.002, 0.005)
 BOX_SIDES = (0.015, 0.03, 0.06, 0.1, 0.16)
 CYLINDER_RADII = (0.008, 0.015, 0.025, 0.04, 0.06)

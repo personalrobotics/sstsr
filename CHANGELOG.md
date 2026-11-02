@@ -4,6 +4,27 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **`KinovaJaco2TwoFinger`** (#185), the JACO2 j2n6s200's two underactuated fingers, as on
+  ADA, registered in `default_registry` as `kinova_jaco2_two_finger` for the cylinder, box,
+  sphere and torus. `FINGER_LENGTH = 0.073 m`, `MAX_APERTURE = 0.073 m` and its
+  `CLOSED_REACH` are measured from ada_assets `jaco2.xml` (e7798be) under MuJoCo 3.14.0. The
+  palm is 125 mm along `j2n6s200_link_6`'s -z, in the fingers' closing plane at x = -2.5 mm
+  (`PALM_OFFSET_FROM_LINK_6`, `PALM_X_IN_LINK_6`). The fingers wrap rather than stay
+  parallel, and fully open they splay with their tips only 37 mm past the palm, so
+  `finger_length` is the reach closed on nothing, where the fingertips meet, not the open
+  reach (the class docstring says why). The dimensions are the model's; they have not been
+  checked against Kinova's drawings.
+- **`tools/finger_reach.py --wrap`** measures such a hand: it closes the fingers on fixed
+  cylinders, end on and broadside at every depth, rather than on nothing, since the JACO2's
+  fingers have no pads whose gap would give the width.
+- **`tools/grasp_closure.py`** closes the JACO2 model's fingers on cylinders posed by the
+  hand's own side, top and bottom templates, and fails unless both fingers touch the
+  cylinder, the palm does not, and the closed fingertips stay inside its far extent. It needs
+  MuJoCo and ada_assets, so it runs outside the test suite.
+
 ## [4.1.0] — 2026-10
 
 The Robotiq hands' fingertips reach further as they close, and their grasp templates now

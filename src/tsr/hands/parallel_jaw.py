@@ -1789,6 +1789,78 @@ class Robotiq2F85(ParallelJawGripper):
         )
 
 
+class KinovaJaco2TwoFinger(ParallelJawGripper):
+    """Kinova JACO2 two-finger hand (j2n6s200), as on ADA.
+
+    Fixed hardware parameters: ``FINGER_LENGTH = 0.073 m``, ``MAX_APERTURE = 0.073 m``.
+
+    Each finger is underactuated: one drive pulls a tendon across a proximal link and a
+    spring-straightened distal link, so the fingers wrap around what they close on rather
+    than staying parallel. Measured from ada_assets ``jaco2.xml`` (e7798be, MuJoCo 3.14.0)
+    with ``tools/finger_reach.py --palm-offset 0.125 --wrap``, which closes the fingers on
+    a fixed cylinder of each width rather than on nothing:
+
+    - **Palm.** The hand housing's forward face is 120.6 mm past ``j2n6s200_link_6``
+      along its -z, the approach; the TSR palm is at 125 mm, rounded up for clearance as
+      the :class:`Robotiq2F140`'s is. It lies in the fingers' closing plane, at the finger
+      mounts' x = -2.5 mm, so the palm is ``link_6 + [-0.0025, 0, -0.125]``.
+    - ``MAX_APERTURE = 0.073 m`` — the widest cylinder the fully open fingers clear, its
+      axis along the approach and its end at the palm: 73.5 mm. Fully open (the model's
+      rest configuration) the fingers splay into a V that is narrowest at its root, by
+      the palm, so an object that fits there fits at every depth.
+    - ``FINGER_LENGTH = 0.073 m`` — how far the fingertips reach past the palm closed on
+      nothing, where they meet (72.9 mm). This is not the open reach: fully open the
+      fingertips are only 37.4 mm past the palm and about 210 mm apart, and they bound no
+      grasp. Closed on anything narrower than the aperture they reach 73–78 mm past the
+      palm, so with the open reach as ``finger_length`` the closed-reach limit (#193)
+      would empty every side grasp, and the shallow depths would put a thin object near
+      the palm, where the fingers, meeting at their tips, never close on it.
+    - ``CLOSED_REACH`` — the furthest the fingertips reach closed on a cylinder of each
+      width, over every placement the templates use: end on (its axis along the
+      approach, as in a top grasp) and broadside (its axis along the palm normal, as in a
+      side grasp) at each depth, 4 mm apart, where both fingers stop on it. It rises from
+      72.9 mm to 77.8 mm at 56 mm and wider. Six of the tool's 4 mm levels; linear
+      interpolation between them is within 0.1 mm of every measured level.
+
+    ``tools/grasp_closure.py`` closes the model's fingers on cylinders posed by this
+    hand's own side, top and bottom templates, and checks that both fingers touch the
+    cylinder, the palm does not, and the closed fingertips stay inside its far extent.
+    Spheres, boxes and tori use the same dimensions but have not been closed on in the
+    model. The dimensions are the model's and have not been checked against Kinova's
+    KG-2 drawings.
+
+    Outputs poses in the canonical TSR EE frame (z=approach, y=finger-opening,
+    x=palm normal). In ``j2n6s200_link_6`` that frame is the palm above, rotated 180°
+    about x (quaternion ``w, x, y, z = 0, 1, 0, 0``): x along link_6's x, y along its -y
+    (the fingers close along link_6's y), and z along its -z. ada_assets' ``jaco2.xml``
+    has no site there yet; a grasp site at that pose is what the arm's ``ee_site`` should
+    be for IK to target the canonical frame directly.
+    """
+
+    FINGER_LENGTH = 0.073  # palm -> fingertips closed on nothing, where they meet [m]
+    MAX_APERTURE = 0.073  # widest cylinder the open fingers clear (73.5 mm) [m]
+    CLOSED_REACH = (  # (width closed on, reach past the palm) [m]; see the class docstring
+        (0.000, 0.0729),
+        (0.008, 0.0741),
+        (0.020, 0.0756),
+        (0.040, 0.0773),
+        (0.048, 0.0777),
+        (0.072, 0.0778),
+    )
+
+    # The TSR palm in ``j2n6s200_link_6``: this far along its -z (the approach), at x =
+    # ``PALM_X_IN_LINK_6`` in the fingers' closing plane. Callers placing a grasp site in an
+    # MjSpec put it at ``[PALM_X_IN_LINK_6, 0, -PALM_OFFSET_FROM_LINK_6]``, quat (0, 1, 0, 0).
+    PALM_OFFSET_FROM_LINK_6 = 0.125
+    PALM_X_IN_LINK_6 = -0.0025
+
+    def __init__(self):
+        super().__init__(
+            finger_length=self.FINGER_LENGTH,
+            max_aperture=self.MAX_APERTURE,
+        )
+
+
 class FrankaHand(ParallelJawGripper):
     """Franka Emika Panda hand (parallel jaw gripper).
 
