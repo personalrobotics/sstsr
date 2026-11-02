@@ -81,20 +81,17 @@ default_registry = HandRegistry()
 default_registry.register("parallel_jaw", "cylinder", "grasp")(lambda gripper, **kw: gripper.grasp_cylinder(**kw))
 default_registry.register("robotiq_2f140", "cylinder", "grasp")(lambda gripper, **kw: gripper.grasp_cylinder(**kw))
 default_registry.register("robotiq_2f85", "cylinder", "grasp")(lambda gripper, **kw: gripper.grasp_cylinder(**kw))
+# The JACO2 is registered for cylinders only: they are what its grasps were closed on in
+# its model (tools/grasp_closure.py). Its box, sphere and torus grasps are unverified.
 default_registry.register("kinova_jaco2_two_finger", "cylinder", "grasp")(
     lambda gripper, **kw: gripper.grasp_cylinder(**kw)
 )
 default_registry.register("parallel_jaw", "box", "grasp")(lambda gripper, **kw: gripper.grasp_box(**kw))
 default_registry.register("robotiq_2f140", "box", "grasp")(lambda gripper, **kw: gripper.grasp_box(**kw))
 default_registry.register("robotiq_2f85", "box", "grasp")(lambda gripper, **kw: gripper.grasp_box(**kw))
-default_registry.register("kinova_jaco2_two_finger", "box", "grasp")(lambda gripper, **kw: gripper.grasp_box(**kw))
 default_registry.register("parallel_jaw", "sphere", "grasp")(lambda gripper, **kw: gripper.grasp_sphere(**kw))
 default_registry.register("robotiq_2f140", "sphere", "grasp")(lambda gripper, **kw: gripper.grasp_sphere(**kw))
 default_registry.register("robotiq_2f85", "sphere", "grasp")(lambda gripper, **kw: gripper.grasp_sphere(**kw))
-default_registry.register("kinova_jaco2_two_finger", "sphere", "grasp")(
-    lambda gripper, **kw: gripper.grasp_sphere(**kw)
-)
 default_registry.register("parallel_jaw", "torus", "grasp")(lambda gripper, **kw: gripper.grasp_torus(**kw))
 default_registry.register("robotiq_2f140", "torus", "grasp")(lambda gripper, **kw: gripper.grasp_torus(**kw))
 default_registry.register("robotiq_2f85", "torus", "grasp")(lambda gripper, **kw: gripper.grasp_torus(**kw))
-default_registry.register("kinova_jaco2_two_finger", "torus", "grasp")(lambda gripper, **kw: gripper.grasp_torus(**kw))

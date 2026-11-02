@@ -104,7 +104,9 @@ measured reach closed to a width, `gripper.reach(width)` — 132 mm for the 2F-1
 72 mm — and its templates keep the closed fingertips inside the object as well as the open
 ones. The JACO2's underactuated fingers wrap around what they close on; fully open they splay
 with their tips only 37 mm past the palm, so its `finger_length` is the reach closed on
-nothing, where the fingertips meet, and its `reach(width)` rises to 78 mm.
+nothing, where the fingertips meet, and its `reach(width)` rises to 78 mm. Only its cylinder
+grasps have been closed on in its model, so it is registered for cylinders only; its other
+generators are unverified.
 
 ```python
 import numpy as np

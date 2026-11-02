@@ -24,17 +24,9 @@ class TestKinovaJaco2TwoFinger(unittest.TestCase):
         radius = hand.max_aperture / 2 + 0.001
         self.assertEqual(hand.grasp_cylinder(radius, 0.10), [])
 
-    def test_registered_for_every_primitive(self):
-        hand = KinovaJaco2TwoFinger()
-        calls = {
-            "cylinder": dict(cylinder_radius=0.025, cylinder_height=0.10),
-            "box": dict(box_x=0.04, box_y=0.05, box_z=0.10),
-            "sphere": dict(object_radius=0.025),
-            "torus": dict(torus_radius=0.04, tube_radius=0.01),
-        }
-        for primitive, kw in calls.items():
-            generate = default_registry.get("kinova_jaco2_two_finger", primitive, "grasp")
-            self.assertTrue(generate(hand, **kw), primitive)
+    def test_registered_for_cylinders(self):
+        generate = default_registry.get("kinova_jaco2_two_finger", "cylinder", "grasp")
+        self.assertTrue(generate(KinovaJaco2TwoFinger(), cylinder_radius=0.025, cylinder_height=0.10))
 
 
 if __name__ == "__main__":

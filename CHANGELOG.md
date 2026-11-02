@@ -8,8 +8,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 - **`KinovaJaco2TwoFinger`** (#185), the JACO2 j2n6s200's two underactuated fingers, as on
-  ADA, registered in `default_registry` as `kinova_jaco2_two_finger` for the cylinder, box,
-  sphere and torus. `FINGER_LENGTH = 0.073 m`, `MAX_APERTURE = 0.073 m` and its
+  ADA, registered in `default_registry` as `kinova_jaco2_two_finger` for cylinders only: they
+  are what its grasps were closed on in its model. Its box, sphere and torus generators run
+  from the same dimensions but are unverified and unregistered. `FINGER_LENGTH = 0.073 m`, `MAX_APERTURE = 0.073 m` and its
   `CLOSED_REACH` are measured from ada_assets `jaco2.xml` (e7798be) under MuJoCo 3.14.0. The
   palm is 125 mm along `j2n6s200_link_6`'s -z, in the fingers' closing plane at x = -2.5 mm
   (`PALM_OFFSET_FROM_LINK_6`, `PALM_X_IN_LINK_6`). The fingers wrap rather than stay
@@ -23,7 +24,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **`tools/grasp_closure.py`** closes the JACO2 model's fingers on cylinders posed by the
   hand's own side, top and bottom templates, and fails unless both fingers touch the
   cylinder, the palm does not, and the closed fingertips stay inside its far extent. It needs
-  MuJoCo and ada_assets, so it runs outside the test suite.
+  MuJoCo and ada_assets, so it runs outside the test suite. Its report and the measurement
+  are committed in `evidence/kinova_jaco2/`, with the commands that reproduce them.
 
 ## [4.1.0] — 2026-10
 

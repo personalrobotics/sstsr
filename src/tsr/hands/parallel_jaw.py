@@ -1825,9 +1825,11 @@ class KinovaJaco2TwoFinger(ParallelJawGripper):
     ``tools/grasp_closure.py`` closes the model's fingers on cylinders posed by this
     hand's own side, top and bottom templates, and checks that both fingers touch the
     cylinder, the palm does not, and the closed fingertips stay inside its far extent.
-    Spheres, boxes and tori use the same dimensions but have not been closed on in the
-    model. The dimensions are the model's and have not been checked against Kinova's
-    KG-2 drawings.
+    Its box, sphere and torus grasps have not been closed on in the model, so the hand is
+    registered in ``default_registry`` for cylinders only; the other generators run from
+    the same dimensions, unverified. The dimensions are the model's and have not been
+    checked against Kinova's KG-2 drawings. The measurements and the closure report are
+    in ``evidence/kinova_jaco2/``.
 
     Outputs poses in the canonical TSR EE frame (z=approach, y=finger-opening,
     x=palm normal). In ``j2n6s200_link_6`` that frame is the palm above, rotated 180°
