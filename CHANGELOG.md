@@ -4,7 +4,10 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [4.2.0] — 2026-11
+
+A hand for ADA: the Kinova JACO2's two-finger gripper, measured from its model and
+registered for cylinders, the primitive it was checked on (#185).
 
 ### Added
 - **`KinovaJaco2TwoFinger`** (#185), the JACO2 j2n6s200's two underactuated fingers, as on
