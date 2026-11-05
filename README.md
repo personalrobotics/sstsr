@@ -148,7 +148,27 @@ grasp_poses = [t.sample(mug_pose) for t in templates]
 
 #### Placing
 
-`StablePlacer` generates one TSR template per stable resting pose on a flat surface:
+`StablePlacer` generates one TSR template per stable resting pose on a flat surface.
+To place an object as it is built, typically its collision model, describe its parts in
+its own frame and call `place`; it chooses how to place them:
+
+```python
+from tsr.placement import Box, Capsule, Cylinder, Shape, StablePlacer
+
+placer = StablePlacer(table_x=0.60, table_y=0.40)
+
+can = Shape([Cylinder(0.033, 0.123, pose=T_can_cylinder)])     # framed at its base
+mug = Shape([Box((0.08, 0.08, 0.10), pose=T_mug_body),
+             Capsule(0.008, 0.05, pose=T_mug_handle)], com=com)
+templates = placer.place(can)    # placed exactly by place_cylinder, framed at the can's origin
+templates = placer.place(mug)    # the hull's faces the true parts support, most stable first
+```
+
+A lone box, cylinder or sphere whose centre of mass is its centre is placed exactly by
+its own factory, wherever it sits in the object frame. Anything else (several parts, hulls,
+capsules) rests on the faces of its convex hull that the true parts support: a curved part
+contributes no rest where it touches along a line or at a point, since the object would roll
+there. The factories `place` uses are public too:
 
 ```python
 import numpy as np

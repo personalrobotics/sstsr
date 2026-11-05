@@ -169,9 +169,61 @@ class Mesh(_Primitive):
         return self.vertices
 
 
+@dataclass(frozen=True)
+class Capsule(_Primitive):
+    """The points within ``radius`` of a segment of ``length`` along z, centred."""
+
+    radius: float
+    length: float
+
+    @property
+    def scale(self) -> float:
+        return self.length + 2 * self.radius
+
+    def _support(self, local: np.ndarray) -> np.ndarray:
+        return np.abs(local[:, 2]) * (self.length / 2.0) + self.radius * np.linalg.norm(local, axis=1)
+
+    def _boundary(self) -> np.ndarray:
+        u = np.linspace(0.0, 2 * np.pi, 72, endpoint=False)
+        v = np.linspace(-np.pi / 2, np.pi / 2, 37)
+        uu, vv = np.meshgrid(u, v, indexing="ij")
+        ball = np.stack([np.cos(vv) * np.cos(uu), np.cos(vv) * np.sin(uu), np.sin(vv)], axis=-1).reshape(-1, 3)
+        return np.vstack([ball * self.radius + [0.0, 0.0, s * self.length / 2.0] for s in (-1, 1)])
+
+
+@dataclass(frozen=True)
+class Compound(_Primitive):
+    """The union of posed primitives ``(prim, T_object_prim)``, with its centre of mass.
+
+    The support of a union is the largest of its parts' supports, and its contact patch
+    is the union of the patches of the parts that reach the lowest point, so it is
+    certified from the parts' own support functions like every other body here.
+    """
+
+    parts: Tuple[Tuple[_Primitive, np.ndarray], ...]
+    com: np.ndarray
+
+    @property
+    def scale(self) -> float:
+        return max(float(np.linalg.norm(T[:3, 3])) + p.scale for p, T in self.parts)
+
+    def support(self, d: np.ndarray, R: np.ndarray) -> np.ndarray:
+        d = np.asarray(d, dtype=float)
+        rows = np.atleast_2d(d)
+        h = np.max([rows @ (R @ T[:3, 3]) + np.atleast_1d(p.support(d, R @ T[:3, :3])) for p, T in self.parts], axis=0)
+        return h[0] if d.ndim == 1 else h
+
+    def contact(self, R: np.ndarray, t: np.ndarray, atol: float) -> np.ndarray:
+        posed = [(p, R @ T[:3, :3], R @ T[:3, 3] + t) for p, T in self.parts]
+        lowest = [float(tp[2] - p.support(-_Z, Rp)) for p, Rp, tp in posed]
+        floor = min(lowest)
+        patches = [p.contact(Rp, tp, atol) for (p, Rp, tp), z in zip(posed, lowest) if z <= floor + atol]
+        return np.vstack(patches)
+
+
 def centre_of_mass(prim, R: np.ndarray, t: np.ndarray) -> np.ndarray:
     """The posed centre of mass; the frame origin for the centred primitives."""
-    local = prim.com if isinstance(prim, Mesh) else np.zeros(3)
+    local = prim.com if isinstance(prim, (Mesh, Compound)) else np.zeros(3)
     return R @ local + t
 
 

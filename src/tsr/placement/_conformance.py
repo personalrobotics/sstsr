@@ -30,7 +30,7 @@ from ..placement_provenance import PlacementProvenance
 
 #: The primitives the built-in factories emit. Spelled as in the grasp vocabulary so a
 #: caller can key off ``primitive`` across both contracts.
-_PRIMITIVES = frozenset({"cylinder", "box", "sphere", "torus", "mesh"})
+_PRIMITIVES = frozenset({"cylinder", "box", "sphere", "torus", "mesh", "compound"})
 
 #: ``"neutral"`` is a contact that cannot resist tipping at all but does not fall — a
 #: sphere, which rolls. A mesh face with a vanishing margin is a knife-edge equilibrium
@@ -41,7 +41,7 @@ _EQUILIBRIA = frozenset({"stable", "neutral"})
 _FACELESS = frozenset({"sphere"})
 
 #: Mesh faces are enumerated; the primitives' variants are geometric labels.
-_ENUMERATED = frozenset({"mesh"})
+_ENUMERATED = frozenset({"mesh", "compound"})
 
 #: ``variant`` labels that name an axis, and the object-frame normal each promises.
 _AXIS_NORMALS = {

@@ -26,6 +26,7 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
+from tsr import placement as tp
 from tsr.placement import StablePlacer
 
 from .._hypothesis_strategies import transforms
@@ -264,6 +265,103 @@ def test_non_finite_mesh_arguments_raise(bad):
         placer.place_mesh(verts, np.array([bad, 0.0, 0.0]))
     with pytest.raises(ValueError, match="min_margin_deg"):
         placer.place_mesh(verts, com, min_margin_deg=bad)
+
+
+@pytest.mark.parametrize("bad", nonfinite)
+@pytest.mark.parametrize(
+    "build,argument",
+    [
+        (lambda v: tp.Box((v, 0.1, 0.1)), "size"),
+        (lambda v: tp.Cylinder(v, 0.1), "radius"),
+        (lambda v: tp.Cylinder(0.04, v), "height"),
+        (lambda v: tp.Sphere(v), "radius"),
+        (lambda v: tp.Capsule(0.02, v), "length"),
+        (lambda v: tp.Hull(np.full((4, 3), v)), "vertices"),
+        (lambda v: tp.Box((0.1, 0.1, 0.1), pose=np.diag([v, 1.0, 1.0, 1.0])), "pose"),
+        (lambda v: tp.Shape([tp.Sphere(0.05)], com=np.array([v, 0.0, 0.0])), "com"),
+    ],
+)
+def test_non_finite_shape_arguments_raise_naming_the_argument(build, argument, bad):
+    with pytest.raises(ValueError, match=argument):
+        build(bad)
+
+
+@pytest.mark.parametrize(
+    "build,argument",
+    [
+        (lambda: tp.Box((0.1, 0.1, 0.1), pose=np.diag([-1.0, 1.0, 1.0, 1.0])), "determinant"),  # a reflection
+        (lambda: tp.Shape([]), "parts"),
+        (lambda: tp.Shape(tp.Sphere(0.05)), "parts"),  # one part, not a sequence of them
+        (lambda: tp.Shape([np.eye(4)]), "parts"),
+        (lambda: tp.Hull([[0, 0, 0], [1, 0, 0], [0, 1, 0], [1, 1, 0]]), "vertices"),  # flat
+        (lambda: StablePlacer(0.3, 0.2).place([tp.Sphere(0.05)]), "Shape"),
+    ],
+)
+def test_malformed_shapes_raise(build, argument):
+    with pytest.raises(ValueError, match=argument):
+        build()
+
+
+@pytest.mark.parametrize(
+    "part,factory",
+    [
+        (tp.Cylinder(0.04, 0.12), lambda p: p.place_cylinder(0.04, 0.12)),
+        (tp.Box((0.2, 0.1, 0.3)), lambda p: p.place_box(0.2, 0.1, 0.3)),
+        (tp.Sphere(0.05), lambda p: p.place_sphere(0.05)),
+    ],
+)
+def test_place_on_a_centred_primitive_is_its_exact_factory(part, factory):
+    """The exact path is exact: a lone centred primitive admits the same poses, region by
+    region, as its own factory."""
+    placer = StablePlacer(table_x=0.30, table_y=0.20)
+    placed, direct = placer.place(tp.Shape([part])), factory(placer)
+    assert [t.variant for t in placed] == [t.variant for t in direct]
+    for a, b in zip(placed, direct):
+        for xi in bw_samples(b, rng=np.random.default_rng(0)):
+            pose, expected = (t.instantiate(np.eye(4)).to_transform(xi) for t in (a, b))
+            np.testing.assert_allclose(pose, expected, atol=1e-12)
+
+
+def test_place_frames_an_object_off_its_part():
+    """A can framed at its base's centre, as an asset is, stands with that origin on the
+    surface: nobody shifts it by half its height."""
+    T = np.eye(4)
+    T[2, 3] = 0.0615
+    upright = StablePlacer(table_x=0.30, table_y=0.20).place(tp.Shape([tp.Cylinder(0.033, 0.123, pose=T)]))[0]
+    assert upright.variant == "-z"
+    np.testing.assert_allclose(upright.instantiate(np.eye(4)).to_transform(np.zeros(6)), np.eye(4), atol=1e-12)
+
+
+def test_a_part_copies_its_pose():
+    """A caller may reuse one buffer for every geom's pose."""
+    T = np.eye(4)
+    part = tp.Cylinder(0.03, 0.1, pose=T)
+    T[2, 3] = 0.5
+    assert T.flags.writeable and part.pose[2, 3] == 0.0
+
+
+def test_a_variant_names_the_same_face_whatever_is_filtered():
+    """A turned box's faces off the object's axes are named by the box's own faces, so a
+    stricter ``min_margin_deg`` drops faces without renaming the ones it keeps."""
+    from scipy.spatial.transform import Rotation
+
+    T = np.eye(4)
+    T[:3, :3] = Rotation.from_euler("x", 30, degrees=True).as_matrix()
+    shape = tp.Shape([tp.Box((0.1, 0.2, 0.4), pose=T)])
+    placer = StablePlacer(table_x=1.0, table_y=1.0)
+    every = {t.variant: t.provenance.face_normal for t in placer.place(shape)}
+    strict = {t.variant: t.provenance.face_normal for t in placer.place(shape, min_margin_deg=20.0)}
+    assert strict and len(strict) < len(every)
+    assert all(every[v] == n for v, n in strict.items())
+
+
+def test_an_off_centre_sphere_leaves_the_object_as_framed():
+    """A sphere's own rotation means nothing, so it cannot tilt the object it is part of."""
+    T = np.eye(4)
+    T[:3, :3] = np.array([[1, 0, 0], [0, 0, -1], [0, 1, 0]], float)  # turned 90° about x
+    T[:3, 3] = [0.1, 0.0, 0.05]
+    (t,) = StablePlacer(table_x=1.0, table_y=1.0).place(tp.Shape([tp.Sphere(0.05, pose=T)]))
+    np.testing.assert_allclose(t.Tw_e[:3, :3], np.eye(3), atol=1e-12)
 
 
 @matrix_settings(250)

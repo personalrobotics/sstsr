@@ -4,6 +4,20 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **`StablePlacer.place(shape)`** (#201) places an object described by its parts, so a
+  caller need not know which factory fits it. A `tsr.placement.Shape` holds `Box`, `Cylinder`,
+  `Sphere`, `Capsule` and `Hull` parts, each at its pose in the object frame, and the centre
+  of mass (by default the parts' volume-weighted centroid). A lone box, cylinder or sphere
+  centred on its centre of mass is placed exactly by its own factory and re-framed at the
+  object origin, so a can framed at its base stands with that origin on the surface. Any
+  other shape rests on the faces of its convex hull that the true parts support, taking
+  heights from their exact support and contact patches from their own points, so a sampled
+  curve cannot invent a rest where the object rolls. Those rests record the primitive
+  `"compound"`, enumerated like a mesh's faces, and come most stable first.
+
 ## [4.2.0] — 2026-11
 
 A hand for ADA: the Kinova JACO2's two-finger gripper, measured from its model and
