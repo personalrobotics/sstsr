@@ -108,6 +108,13 @@ nothing, where the fingertips meet, and its `reach(width)` rises to 78 mm. Only 
 grasps have been closed on in its model, so it is registered for cylinders only; its other
 generators are unverified.
 
+The Robotiq hands also grip only on their fingertip pads (65 mm long on the 2F-140, 37.5 mm on
+the 2F-85); inward of them is the linkage. They declare `pad_length`, and every grasp keeps
+its contacts on the pads, a margin inside both ends, measured from the closed fingertips.
+Their templates record `provenance.grip == "pad"`. A custom hand can declare the same with
+`ParallelJawGripper(..., pad_length=..., min_encompassing_diameter=...)`; without them it
+grips on the whole finger.
+
 ```python
 import numpy as np
 from tsr.hands import ParallelJawGripper, Robotiq2F85, Robotiq2F140, FrankaHand

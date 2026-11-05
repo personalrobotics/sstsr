@@ -6,9 +6,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-The Robotiq 2F-85 and 2F-140 grip only on their fingertip pads, and their grasps now keep
-the contacts there (#189). The pads ride forward with the fingertips as the hand closes
-(#193), so a contact's place on them is measured from the closed fingertips.
+Objects are placed by their parts, and the Robotiq hands grip on their pads.
+`StablePlacer.place(shape)` takes an object as its boxes, cylinders, spheres, capsules and
+hulls, and picks how to place it (#201). The Robotiq 2F-85 and 2F-140 grip only on their
+fingertip pads, and their grasps now keep the contacts there (#189). The pads ride forward
+with the fingertips as the hand closes (#193), so a contact's place on them is measured
+from the closed fingertips.
 
 ### Added
 - **`StablePlacer.place(shape)`** (#201) places an object described by its parts, so a
