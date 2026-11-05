@@ -37,6 +37,7 @@ import numpy as np
 import pytest
 
 import tsr.placement._stable_poses as sp
+import tsr.placement.shape as shp
 import tsr.placement.stable_placer as spl
 from tsr.placement import StablePlacer
 from tsr.template import TSRTemplate
@@ -347,6 +348,48 @@ def wrong_face_normal_in_record() -> contextlib.AbstractContextManager:
     return apply()
 
 
+def sampled_contact_trusted() -> contextlib.AbstractContextManager:
+    """#201: ``place`` takes a candidate face's height and contact from the curved parts'
+    sampled surface points instead of the parts themselves, so a cylinder lying between
+    two rim samples rests on a sliver face, and the bottle gains rests where it rolls."""
+
+    @contextlib.contextmanager
+    def apply():
+        def support(self, n):
+            return float((self.surface() @ n).max())
+
+        def contact(self, n, h, atol):
+            points = self.surface()
+            return points[points @ n >= h - atol]
+
+        with contextlib.ExitStack() as stack:
+            stack.enter_context(_patch(shp.Shape, "support", support))
+            for part in (shp.Cylinder, shp.Sphere, shp.Capsule):
+                stack.enter_context(_patch(part, "support", support))
+                stack.enter_context(_patch(part, "contact", contact))
+            yield
+
+    return apply()
+
+
+def footprint_about_part_centre() -> contextlib.AbstractContextManager:
+    """#201: a part's reach is taken about its own centre rather than the object origin
+    the region slides, so an object framed off its part hangs off the surface's edge."""
+
+    @contextlib.contextmanager
+    def apply():
+        def box_reach(self, R):
+            return shp._horizontal(self.corners - self.centre, R)
+
+        def cylinder_reach(self, R):
+            return self.radius
+
+        with _patch(shp.Box, "reach", box_reach), _patch(shp.Cylinder, "reach", cylinder_reach):
+            yield
+
+    return apply()
+
+
 # --------------------------------------------------------------------------- #
 # The gate
 # --------------------------------------------------------------------------- #
@@ -379,6 +422,8 @@ MUTANTS: List[Mutant] = [
     ),
     Mutant("sphere_claims_stable", sphere_claims_stable, "#160 neutral and knife-edge equilibria conflated"),
     Mutant("wrong_face_normal_in_record", wrong_face_normal_in_record, "#160 the recorded face normal is wrong"),
+    Mutant("sampled_contact_trusted", sampled_contact_trusted, "#201 a sampled curve invents rests where it rolls"),
+    Mutant("footprint_about_part_centre", footprint_about_part_centre, "#201 an off-centre frame hangs off the edge"),
 ]
 
 

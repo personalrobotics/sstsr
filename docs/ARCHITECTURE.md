@@ -419,6 +419,36 @@ dynamics, friction, or that the object will survive being let go from above it.
   stable only when the projected centre of mass is inside by more than `atol`; a centre
   of mass exactly on a support edge is a critical equilibrium, not a rest.
 
+### Placing an object by its parts (#201)
+
+`place(shape)` takes the object as a `Shape`: convex parts (box, cylinder, sphere,
+capsule, hull), each posed in the object frame, and the centre of mass. It owns the
+choice of method, under the same clauses:
+
+- **A lone box, cylinder or sphere whose centre of mass is its centre** goes to its exact
+  factory, and each template is re-framed at the object origin: `Tw_e` is the object's
+  resting rotation, a pure rotation, the origin's height goes in `T_ref_tsr`, and the
+  footprint is taken about the origin. A sphere off the origin keeps the object's roll and
+  pitch fixed: rolling would move the origin through the sphere's centre, not about it. A
+  variant names the resting face's object-frame normal, as `"-z"` along an axis and
+  `"face-k"` otherwise.
+- **Anything else** rests on a face of its convex hull, found from points on the parts'
+  surfaces and kept only if the **true** parts support it. The resting height is the
+  parts' exact support `max_i h_i(n)`, the contact patch is the parts' own points on that
+  plane (a cylinder's cap as its inscribed polygon, so the patch is never larger than the
+  true one), and the face is stable only if the centre of mass projects inside it by more
+  than `atol`. A curved part sampled into points otherwise contributes sliver faces where
+  the real object touches along a line or at a point and **rolls**; those are not rests,
+  so a lying cylinder or a capsule yields none. A rest whose contact meets a curved part
+  at a single tangent point between samples can be missed; none is invented. The
+  footprint is exact for boxes, hulls, spheres, capsules and upright cylinders, and for a
+  tilted cylinder bounded above to within 0.16%. These rests record the primitive
+  `"compound"`, enumerated like a mesh's faces, most stable first.
+
+The oracle certifies `place` against a `Compound` of its own primitives, built from the
+shape's public fields: its support is the largest of its parts', and its contact patch
+the union of the patches of the parts that reach the lowest point.
+
 ### Assurance
 
 Two layers, as on the grasp side. `_placement_oracle.py` certifies a *concrete* posed
