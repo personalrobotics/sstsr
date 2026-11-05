@@ -7,16 +7,24 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 The Robotiq 2F-85 and 2F-140 grip only on their fingertip pads, and their grasps now keep
-the contacts there (#189). Before, every depth from the fingertip to the far surface was
-offered, so the shallowest 2F-140 grasp of a 66 mm can pinched it on the pad's very edge,
-and grasps past the templates put it on the linkage, where in simulation it failed about
-twice as often (personalrobotics/geodude_assets#36).
+the contacts there (#189). The pads ride forward with the fingertips as the hand closes
+(#193), so a contact's place on them is measured from the closed fingertips.
 
 ### Added
+- **`StablePlacer.place(shape)`** (#201) places an object described by its parts, so a
+  caller need not know which factory fits it. A `tsr.placement.Shape` holds `Box`, `Cylinder`,
+  `Sphere`, `Capsule` and `Hull` parts, each at its pose in the object frame, and the centre
+  of mass (by default the parts' volume-weighted centroid). A lone box, cylinder or sphere
+  centred on its centre of mass is placed exactly by its own factory and re-framed at the
+  object origin, so a can framed at its base stands with that origin on the surface. Any
+  other shape rests on the faces of its convex hull that the true parts support, taking
+  heights from their exact support and contact patches from their own points, so a sampled
+  curve cannot invent a rest where the object rolls. Those rests record the primitive
+  `"compound"`, enumerated like a mesh's faces, and come most stable first.
 - **Gripping surfaces on `ParallelJawGripper`**: `pad_length` (how far back from the
   fingertip the pads grip) and `min_encompassing_diameter`, both keyword-only and `None`
-  by default. With neither, a hand emits exactly the templates it did in 4.0.0 —
-  verified byte for byte against the 4.0.0 wheel on 4,000 random cases.
+  by default (#189). With neither, a hand emits exactly the templates it did in 4.2.0 —
+  verified byte for byte against 4.2.0's generator on 5,000 seeded random cases.
 - `Robotiq2F140`: `PAD_LENGTH = 0.065`, `MIN_ENCOMPASSING_DIAMETER = 0.090`.
   `Robotiq2F85`: `PAD_LENGTH = 0.0375`, `MIN_ENCOMPASSING_DIAMETER = 0.043`. Pad lengths
   are measured from geodude_assets' `2f140.xml` and menagerie's `2f85.xml`; the diameters
@@ -26,22 +34,153 @@ twice as often (personalrobotics/geodude_assets#36).
 - Clause 9 of the geometric grasp contract, and the oracle and matrix boundaries for it.
 
 ### Changed
-- **A hand with pads keeps every contact on them, a margin inside both ends.** A closing
-  line across the object (cylinder side, sphere, torus) sits between `c` and `P − c`
-  behind the fingertip; a face grasp (caps, box faces) inserts at most `P − c`. For the
-  can on the 2F-140, palm-to-axis now runs 110.7 → 52.3 mm instead of 114 → 84 mm. A
-  cylinder side or sphere grasp on such a hand no longer stops at the far surface: the
-  open fingers straddle the object, and where the contact lands on the finger is what
-  matters.
+- **A hand with pads keeps every contact on them, a margin inside both ends, measured
+  from the closed fingertips.** A closing line across the object (cylinder side, sphere,
+  torus) sits between `c` and `P − c` behind them; a face grasp (caps, box faces) grips
+  at most `P − c` back from them. The pads only narrow a band: every template still keeps
+  the closed fingertips inside the far surface (#193). Most visibly, a 2F-85 box or cap
+  grasp deeper than its 37.5 mm pads allow is no longer offered, and on a wide object
+  whose closed reach gain is small the shallowest pose no longer pinches at the pad's tip.
+  The 66 mm can on the 2F-140 keeps 4.2.0's depths, its contacts 19–30 mm up the pads.
 - Template names and descriptions of the two Robotiq hands carry the grip ("shallow
   pad", …).
 
 ### Known limitation
-- **Encompassing grasps are all but unused on the Robotiq hands.** They're defined by the
-  widest chord lying behind the pads. On both hands `L − P` is about half the minimum
-  encompassing diameter, so a wide enough object meets the palm first. The 2F-140
-  encompasses only below about 2 mm of clearance, and the 2F-85 never does. A
-  linkage-aware model is #204.
+- **Neither Robotiq hand encompasses.** Encompassing is modelled as the widest chord
+  behind the pads, still bounded by the far surface, and on both hands no object within
+  the aperture has one. A linkage-aware model is #204.
+
+## [4.2.0] — 2026-11
+
+A hand for ADA: the Kinova JACO2's two-finger gripper, measured from its model and
+registered for cylinders, the primitive it was checked on (#185).
+
+### Added
+- **`KinovaJaco2TwoFinger`** (#185), the JACO2 j2n6s200's two underactuated fingers, as on
+  ADA, registered in `default_registry` as `kinova_jaco2_two_finger` for cylinders only: they
+  are what its grasps were closed on in its model. Its box, sphere and torus generators run
+  from the same dimensions but are unverified and unregistered. `FINGER_LENGTH = 0.073 m`, `MAX_APERTURE = 0.073 m` and its
+  `CLOSED_REACH` are measured from ada_assets `jaco2.xml` (e7798be) under MuJoCo 3.14.0. The
+  palm is 125 mm along `j2n6s200_link_6`'s -z, in the fingers' closing plane at x = -2.5 mm
+  (`PALM_OFFSET_FROM_LINK_6`, `PALM_X_IN_LINK_6`). The fingers wrap rather than stay
+  parallel, and fully open they splay with their tips only 37 mm past the palm, so
+  `finger_length` is the reach closed on nothing, where the fingertips meet, not the open
+  reach (the class docstring says why). The dimensions are the model's; they have not been
+  checked against Kinova's drawings.
+- **`tools/finger_reach.py --wrap`** measures such a hand: it closes the fingers on fixed
+  cylinders, end on and broadside at every depth, rather than on nothing, since the JACO2's
+  fingers have no pads whose gap would give the width.
+- **`tools/grasp_closure.py`** closes the JACO2 model's fingers on cylinders posed by the
+  hand's own side, top and bottom templates, and fails unless both fingers touch the
+  cylinder, the palm does not, and the closed fingertips stay inside its far extent. It needs
+  MuJoCo and ada_assets, so it runs outside the test suite. Its report and the measurement
+  are committed in `evidence/kinova_jaco2/`, with the commands that reproduce them.
+
+## [4.1.0] — 2026-10
+
+The Robotiq hands' fingertips reach further as they close, and their grasp templates now
+allow for it (#193). Both are four-bar hands whose pads swing forward on closing: the 2F-140
+closed on a 72 mm object reaches about 132 mm past the palm, not its open `FINGER_LENGTH` of
+114 mm. A template that kept the *open* fingertips a clearance inside an object's far face
+could drive the *closed* ones through it — into the table, for a top grasp of a short box.
+That is what Geodude's lifts were starting in collision with: a top grasp of `gelatin_box`
+(72 × 88 × 28 mm) closed across 72 mm puts the fingertips about 18 mm further down, into
+the worktop.
+
+A box grasp's default margin now scales with the box, as the cylinder side grasp's already
+scaled with its radius (#195). It used to be 10% of `finger_length` whatever the box, a
+fraction of a length a short box doesn't have, and with the closed reach made honest that
+emptied short boxes' top grasps that are physically sound.
+
+Minor rather than patch: there is a new API, and templates change in two places. **The
+2F-140's and 2F-85's** change wherever the closed reach binds. `FrankaHand` and every
+`ParallelJawGripper` built from dimensions declare no reach curve, so their reach is
+`finger_length` at every width, as before. **Every hand's default box margin** changes on a
+box shorter than its fingers along the approach. A box at least as long as the fingers, and
+any explicitly supplied `clearance`, give exactly the templates they gave before. Pin
+`sstsr>=4.1` if you rely on Robotiq templates keeping their closed fingertips inside the
+object.
+
+**What changes for the Robotiq hands.** Only the deep end of a depth band, and only where it
+faces the far side of what the fingers span: it moves shallower by `reach(span) −
+finger_length`. Shallow depths, palm limits, slide bands, preshapes and frames do not move.
+For `Robotiq2F140()` at its default margin, first with the closed reach alone (#193) and then
+with the box margin scaled as well (#195):
+
+| call | 4.0 | closed reach (#193) | and scaled margin (#195) |
+|---|---|---|---|
+| `grasp_box_top(0.072, 0.088, 0.028)` | 6, margin 11.4 mm, depths 11.4–16.6 mm | none: `closed_reach_too_long` | 6, margin 2.8 mm, depths 2.8 / 5.2 / 7.7 mm (x), 2.8 / 7.0 / 11.3 mm (y) |
+| `grasp_box_top(0.158, 0.028, 0.084)` | 3, margin 11.4 mm, depths 11.4 / 42.0 / 72.6 mm | 3, depths 11.4 / 30.3 / 49.1 mm | 3, margin 8.4 mm, depths 8.4 / 30.3 / 52.1 mm |
+| `grasp_cylinder_side(0.033, 0.123)` | 6, margin 3.3 mm, depths 33.0 / 47.9 / 62.7 mm | 6, depths 33.0 / 38.5 / 44.0 mm | unchanged by #195 |
+
+Radial grasps need a radius beyond the closed-reach gain: with default clearance the 2F-140
+side-grasps cylinders and spheres from 24 mm radius, the 2F-85 from 15 mm, where both used to
+accept any radius their aperture allowed.
+
+### Added
+- **`ParallelJawGripper.reach(width)`** (#193): how far the fingertips reach past the palm
+  along the approach, closed to `width` — the gap between the pads' contact faces, the same
+  quantity as `max_aperture` and a template's span. It is `finger_length` unless the hand
+  declares a measured curve as **`CLOSED_REACH`**, which it interpolates linearly, holds at
+  its ends outside the measured widths, and never lets fall below `finger_length`.
+- **`Robotiq2F140.CLOSED_REACH` and `Robotiq2F85.CLOSED_REACH`**, measured from geodude_assets
+  `2f140.xml` (395991d) and mujoco_menagerie `robotiq_2f85/2f85.xml` (feadf76) under MuJoCo
+  3.14.0. Fully open each reads its own `MAX_APERTURE` and `FINGER_LENGTH` back, to within
+  0.4 mm. The curves are the models'; neither has been checked against Robotiq's drawings.
+- **`tools/finger_reach.py`**, which measures such a curve from a hand's MJCF, so the numbers
+  above can be regenerated rather than trusted.
+- **A new empty-set reason, `closed_reach_too_long`**: the open hand fits, and only the
+  closed fingertips would pass the far face. `insufficient_clearance_band` keeps its meaning,
+  an empty band for the open hand.
+
+### Changed
+- **A box grasp's inferred default margin is `clearance_fraction × min(finger_length,
+  approach_extent)`** (#195), where `approach_extent` is the box's extent along that family's
+  approach (`box_z` for top and bottom, `box_x` and `box_y` for the faces). It mirrors the
+  cylinder side grasp's `min(finger_length, radius)`. Only the inferred default changes: an
+  explicit `clearance` is used exactly as given, and where `approach_extent ≥ finger_length`
+  the default is what it was. The closed-reach bound still holds, so a smaller margin never
+  lets the fingertips, open or closed, leave the box. As before, the one margin also sets
+  the slide edges and the default preshape. There is no absolute floor: an application that
+  needs more passes an explicit, measured `clearance`.
+- **Box templates record their margin** (#195): provenance `metadata["margin"]` is the edge
+  margin the depth and slide bands used, and `metadata["margin_basis"]` is `"supplied"` or
+  `"min(finger_length, approach_extent)"`.
+- **Every depth limit that faces the far side of what the fingers span holds for the closed
+  fingertips too** (#193): it is `extent − m − (reach(span) − finger_length)` rather than
+  `extent − m`. That covers box top, bottom and both face families (`span` is the box
+  dimension the fingers close across), cylinder top, bottom and side (`span` is the
+  diameter), and the sphere and torus side, whose radial band has the same far-surface limit
+  as the cylinder side. The torus span grasp is unchanged: its fingers pass outside the
+  ring, so no far face bounds its depth.
+- **A box family emptied in different ways per orientation reports the one nearest to
+  feasible**: `closed_reach_too_long`, then `cannot_straddle`, then
+  `insufficient_clearance_band`. Before, any orientation with a slide band read as
+  `cannot_straddle`.
+- **Tests.** A property test checks, from the poses alone and for each named hand over a grid
+  of boxes, cylinders and spheres, that the palm stays a clearance outside the near face and
+  the fingertips a clearance inside the far face, open and closed
+  (`tests/tsr/hands/test_closed_reach.py`). Three existing tests were sized for a prismatic
+  jaw: `test_outputs_canonical_frames` compares the 2F-140 with a plain jaw that now carries
+  the same curve, the comfortable regime in `test_declared_families_are_all_emitted` grows a
+  radial object's radius past a linkage hand's closed-reach gain, and the mutation-gate
+  corpus's torus is 22 mm / 18 mm instead of 30 mm / 10 mm, so the 2F-85 can still side-grasp
+  its tube.
+- **Tests for the scaled margin** (#195). The closed-reach property now also runs at the
+  inferred default, holding each box template to the margin it records, over boxes from far
+  shorter than every finger to longer than the longest. `tests/tsr/hands/test_box_margin.py`
+  checks the compatibility promise: large boxes at the default and explicit clearances at any
+  size hash the same as templates recorded before the change, in
+  `tests/reference/box_margin_baseline.json`, apart from the two new provenance fields.
+  `test_reproduction_retains_span_x` certified its box at the old default and now uses the
+  new one.
+
+### Release
+- **Each release publishes the one artifact set that passed verification.** The sdist
+  and wheel are built once, installed alone in clean environments and tested there, then
+  uploaded unchanged; PyPI's and TestPyPI's copies are confirmed by hash. The GitHub
+  release attaches the same files with `SHA256SUMS`, a manifest, and the verification
+  report. Workflow actions are pinned to commit SHAs (docs/RELEASING.md).
 
 ## [4.0.0] — 2026-10
 

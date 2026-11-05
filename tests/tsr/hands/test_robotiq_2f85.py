@@ -29,11 +29,12 @@ class TestRobotiq2F85(unittest.TestCase):
         self.assertIsInstance(self.gripper, ParallelJawGripper)
 
     def test_outputs_canonical_frames(self):
-        # Robotiq2F85 should produce identical Tw_e as a plain
-        # ParallelJawGripper with the same hardware parameters.
+        # Robotiq2F85 should produce identical Tw_e as a plain ParallelJawGripper
+        # with the same hardware parameters, its closed reach (#193) and pads (#189) among them.
         base = ParallelJawGripper(
             finger_length=0.059, max_aperture=0.085, pad_length=0.0375, min_encompassing_diameter=0.043
         )
+        base.CLOSED_REACH = Robotiq2F85.CLOSED_REACH
         # Use a can-sized cylinder (33 mm radius, 115 mm height)
         t_base = base.grasp_cylinder_side(0.033, 0.115)
         t_robotiq = self.gripper.grasp_cylinder_side(0.033, 0.115)

@@ -16,7 +16,7 @@ Usage::
 """
 
 from .base import GripperBase
-from .parallel_jaw import FrankaHand, ParallelJawGripper, Robotiq2F85, Robotiq2F140
+from .parallel_jaw import FrankaHand, KinovaJaco2TwoFinger, ParallelJawGripper, Robotiq2F85, Robotiq2F140
 from .registry import HandRegistry, default_registry
 
 __all__ = [
@@ -25,6 +25,7 @@ __all__ = [
     "Robotiq2F85",
     "Robotiq2F140",
     "FrankaHand",
+    "KinovaJaco2TwoFinger",
     "HandRegistry",
     "default_registry",
 ]

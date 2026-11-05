@@ -81,6 +81,11 @@ default_registry = HandRegistry()
 default_registry.register("parallel_jaw", "cylinder", "grasp")(lambda gripper, **kw: gripper.grasp_cylinder(**kw))
 default_registry.register("robotiq_2f140", "cylinder", "grasp")(lambda gripper, **kw: gripper.grasp_cylinder(**kw))
 default_registry.register("robotiq_2f85", "cylinder", "grasp")(lambda gripper, **kw: gripper.grasp_cylinder(**kw))
+# The JACO2 is registered for cylinders only: they are what its grasps were closed on in
+# its model (tools/grasp_closure.py). Its box, sphere and torus grasps are unverified.
+default_registry.register("kinova_jaco2_two_finger", "cylinder", "grasp")(
+    lambda gripper, **kw: gripper.grasp_cylinder(**kw)
+)
 default_registry.register("parallel_jaw", "box", "grasp")(lambda gripper, **kw: gripper.grasp_box(**kw))
 default_registry.register("robotiq_2f140", "box", "grasp")(lambda gripper, **kw: gripper.grasp_box(**kw))
 default_registry.register("robotiq_2f85", "box", "grasp")(lambda gripper, **kw: gripper.grasp_box(**kw))

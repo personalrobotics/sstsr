@@ -32,6 +32,39 @@ Two consequences worth knowing:
   The guard above then still has something to check: that the built artifact really
   carries it.
 
+## One artifact set, verified, then published
+
+`.github/workflows/release.yml` builds the sdist and the wheel **once**, and publishes
+exactly those bytes:
+
+1. `build` (unprivileged) builds both, checks the guards above, and writes `SHA256SUMS`
+   and `manifest.json` (version, tag, commit, run, and every file's hash) beside them.
+2. `verify` installs each file **alone in a clean environment** (the wheel on Python 3.10
+   and 3.14 on Linux and 3.12 on macOS, the sdist on 3.12 on Linux) and runs the test
+   suite against the installed package, never `src/`. Each run's report names the file,
+   its hash, the interpreter, and the test outcomes.
+3. An rc tag uploads the files unchanged to TestPyPI, and `tools/release_index.py`
+   confirms TestPyPI serves every one with its built hash.
+4. A final tag uploads them unchanged to PyPI, only after every `verify` job passed. The
+   same check confirms PyPI serves them, and sstsr installed from PyPI passes the tests.
+5. The GitHub release attaches the same files, `SHA256SUMS`, `manifest.json`, and
+   `verification.json` (the manifest and every verify report), and the job downloads
+   them back to confirm their hashes. Its notes are this version's changelog section.
+
+Every job after `build` re-checks the files against `SHA256SUMS`, and `SHA256SUMS`
+against the digest `build` recorded, before it acts. Immediately before each upload and
+the release, the job resolves the tag again and stops unless it still points to the
+run's commit. Only the two publishing jobs hold `id-token: write`, only the release job
+holds `contents: write`, and every third-party action is pinned to a full commit SHA.
+
+Anyone can check an installed release against the published hashes:
+
+```bash
+gh release download vX.Y.Z --repo personalrobotics/sstsr --pattern SHA256SUMS
+pip download --no-deps "sstsr==X.Y.Z" -d dl && pip download --no-deps --no-binary :all: "sstsr==X.Y.Z" -d dl
+(cd dl && shasum -a 256 -c ../SHA256SUMS)
+```
+
 ## Steps
 
 1. Land everything for the release. Move the changelog's `[Unreleased]` heading to
@@ -44,7 +77,8 @@ Two consequences worth knowing:
    TSR_MATRIX_SCALE=10 uv run pytest tests/tsr/hands/test_grasp_matrix.py \
        tests/tsr/hands/test_grasp_mutation_gate.py
    ```
-3. Tag the release candidate and push it — this publishes to **TestPyPI**:
+3. Tag the release candidate and push it. Once every verify job passes, this
+   publishes to **TestPyPI**:
    ```bash
    git tag -a vX.Y.Zrc1 -m "sstsr X.Y.Zrc1" && git push origin vX.Y.Zrc1
    ```
@@ -58,7 +92,8 @@ Two consequences worth knowing:
    /tmp/rc/bin/python -c "import tsr; print(tsr.__version__)"
    ```
    Exercise what the release actually changed, not just the import.
-5. Tag the final release — this publishes to **PyPI** and creates the GitHub Release:
+5. Tag the final release on the rc's commit. Once every verify job passes, this
+   publishes to **PyPI** and creates the GitHub Release with the files and their hashes:
    ```bash
    git tag -a vX.Y.Z -m "sstsr X.Y.Z" && git push origin vX.Y.Z
    ```
@@ -68,5 +103,6 @@ run in the `testpypi-release` / `release` GitHub environments.
 
 ## If an rc needs a fix
 
-Land the fix and tag `rc2`. Never move a published tag: the artifact for a given
-version can never be replaced on PyPI or TestPyPI.
+Land the fix and tag `rc2`. Never move or delete a tag while a run for it exists, and
+never move a published one: the artifact for a given version can never be replaced on
+PyPI or TestPyPI.

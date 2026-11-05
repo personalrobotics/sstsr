@@ -49,7 +49,7 @@ from .placement_provenance import PlacementProvenance
 from .template import Provenance, TSRTemplate
 
 # --- Layer 2: factories (domain knowledge -> recipes) -------------------------
-from .hands import FrankaHand, GripperBase, ParallelJawGripper, Robotiq2F85, Robotiq2F140
+from .hands import FrankaHand, GripperBase, KinovaJaco2TwoFinger, ParallelJawGripper, Robotiq2F85, Robotiq2F140
 from .placement import StablePlacer
 
 # --- Layer 3: services --------------------------------------------------------
@@ -113,6 +113,7 @@ __all__ = [
     "Robotiq2F85",
     "Robotiq2F140",
     "FrankaHand",
+    "KinovaJaco2TwoFinger",
     "StablePlacer",
     # sampling helpers
     "choose_tsr",

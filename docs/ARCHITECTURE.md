@@ -127,9 +127,9 @@ Every `grasp_*` / `place_*` factory method obeys one uniform contract:
   objects without `try`/`except`.
 - **Observability:** infeasibility carries a machine-readable reason
   (`exceeds_aperture`, `cannot_straddle`, `insufficient_clearance_band`,
-  `finger_too_short`). The *public* factory method emits a single
-  `logger.debug` at its boundary (not at each internal early return), so an empty
-  result is diagnosable without turning it into an exception. If debug logs prove
+  `finger_too_short`, `closed_reach_too_long`). The *public* factory method emits a
+  single `logger.debug` at its boundary (not at each internal early return), so an
+  empty result is diagnosable without turning it into an exception. If debug logs prove
   insufficient, add an explicit diagnostic-result API — exceptions do not carry
   that responsibility.
 - Templates carry `task` / `subject` / `reference` metadata and the canonical
@@ -193,25 +193,50 @@ preshape `a`, clearance `c`, and **every** pose admitted by a returned template:
    via `TSRTemplate.provenance` (`GraspProvenance`). Tests and oracles read that
    record; they never infer semantics by parsing `name`.
 9. **Gripping surfaces** (#189). For a hand with pads of length `P` (from the
-   fingertip back), the contacts lie where the declared `grip` holds:
+   fingertip back), the contacts lie where the declared `grip` holds. The pads ride
+   with the fingertips, so distances behind the fingertip are measured from the
+   fingertips **closed** on the realized span `s`, `max(L, reach(s))` past the palm
+   (#193); a contact `x` behind the open fingertips is `x + g` behind the closed ones,
+   `g = reach(s) − L`.
    - `grip="pad"`: a grasp whose contacts lie on one closing line (cylinder side,
-     sphere, torus side and span) has that line at least `c` behind the fingertip and
-     at most `P − c`; a face grasp (cylinder caps, box faces), gripped from the
-     fingertip back to the insertion depth `d`, has `d ≤ P − c`.
+     sphere, torus side and span) has that line at least `c` behind the closed
+     fingertip and at most `P − c`; a face grasp (cylinder caps, box faces), gripped
+     from the closed fingertip back to the approached face, `d + g`, has
+     `d + g ≤ P − c`.
    - `grip="encompassing"`: only a cylinder side or a sphere at least the hand's
      `min_encompassing_diameter` wide, with the closing line at least `P + c` behind
-     the fingertip — inward of the pads, where the fingers fold around the object.
+     the closed fingertip — inward of the pads, where the fingers fold around the
+     object.
 
-   A hand without pads declares no grip, and clause 9 is vacuous: it emits exactly
-   the templates it did before #189. Encompassing here is the closing-line model's:
-   the widest chord behind the pads. On the Robotiq 2F-85 and 2F-140 that is all but
-   empty, because `L − P` is about half the minimum encompassing diameter (21.5 mm
-   against 21.5, 49 against 45), so a wide enough object meets the palm first; a real
-   encompassing grip presses the object against the linkage, which this model does
-   not represent (#204).
+   The pads only narrow a band: every template still keeps the closed fingertips a
+   clearance inside the far surface (#193). A hand without pads declares no grip, and
+   clause 9 is vacuous: it emits exactly the templates it did before #189.
+   Encompassing here is the closing-line model's: the widest chord behind the pads,
+   which the far surface also bounds, so it needs `r ≥ P + 2c` as well as
+   `L ≥ r + P + 2c − g`. On the Robotiq 2F-85 and 2F-140 that never holds within the
+   aperture (`P` = 37.5 and 65 mm against radii up to 42.5 and 64 mm, and `L − P` about
+   half the minimum encompassing diameter), so neither hand encompasses. A real
+   encompassing grip presses the object against the linkage, which this model does not
+   represent (#204).
 
 This describes a viable *pre-grasp*. It is **not** a claim of dynamic stability
 or force closure under arbitrary friction — an explicit non-goal.
+
+**Closing must not undo it** (#193). A linkage hand's pads swing forward as it closes,
+so closed on a span `w` its fingertips reach `ParallelJawGripper.reach(w) ≥ L` past the
+palm. Wherever a depth limit faces the far side of what the fingers span — the box top,
+bottom and face bands, the cylinder caps and side, the sphere, the torus side — the
+fingertips stay the promised margin inside that far side closed as well as open: the
+limit is `extent − m − (reach(w) − L)`. A family that this alone empties reports
+`closed_reach_too_long`. The oracle above models the open hand only, which every closed
+template also satisfies; `tests/tsr/hands/test_closed_reach.py` checks the closed one.
+
+**A default margin scales with the object** (#195). When the caller passes no `clearance`,
+it is `clearance_fraction` of the depth the fingers can use: `min(L, r)` for the cylinder
+side, sphere and torus side, `min(L, extent)` for a box family (the box's extent along that
+family's approach), and `L` for the cylinder caps and the torus span. A supplied
+`clearance` is used exactly. Box templates record the margin they used, and its basis, in
+`provenance.metadata["margin"]` and `["margin_basis"]`.
 
 ### Tolerances and conventions (defined once)
 
@@ -421,6 +446,38 @@ dynamics, friction, or that the object will survive being let go from above it.
   stable only when the projected centre of mass is inside by more than `atol`; a centre
   of mass exactly on a support edge is a critical equilibrium, not a rest.
 
+### Placing an object by its parts (#201)
+
+`place(shape)` takes the object as a `Shape`: convex parts (box, cylinder, sphere,
+capsule, hull), each posed in the object frame, and the centre of mass. It owns the
+choice of method, under the same clauses:
+
+- **A lone box, cylinder or sphere whose centre of mass is its centre** goes to its exact
+  factory, and each template is re-framed at the object origin: `Tw_e` is the object's
+  resting rotation, a pure rotation, the origin's height goes in `T_ref_tsr`, and the
+  footprint is taken about the origin. A sphere off the origin keeps the object's roll and
+  pitch fixed, at the object's own orientation: rolling would move the origin through the
+  sphere's centre, not about it, and a sphere's rotation means nothing. A
+  variant names the resting face: its object-frame normal as `"-z"` along an axis, and
+  otherwise the part's own face (`"box -z"`), so the label does not depend on what else
+  was filtered out.
+- **Anything else** rests on a face of its convex hull, found from points on the parts'
+  surfaces and kept only if the **true** parts support it. The resting height is the
+  parts' exact support `max_i h_i(n)`, the contact patch is the parts' own points on that
+  plane (a cylinder's cap as its inscribed polygon, so the patch is never larger than the
+  true one), and the face is stable only if the centre of mass projects inside it by more
+  than `atol`. A curved part sampled into points otherwise contributes sliver faces where
+  the real object touches along a line or at a point and **rolls**; those are not rests,
+  so a lying cylinder or a capsule yields none. A rest whose contact meets a curved part
+  at a single tangent point between samples can be missed; none is invented. The
+  footprint is exact for boxes, hulls, spheres, capsules and upright cylinders, and for a
+  tilted cylinder bounded above to within 0.16%. These rests record the primitive
+  `"compound"`, enumerated like a mesh's faces, most stable first.
+
+The oracle certifies `place` against a `Compound` of its own primitives, built from the
+shape's public fields: its support is the largest of its parts', and its contact patch
+the union of the patches of the parts that reach the lowest point.
+
 ### Assurance
 
 Two layers, as on the grasp side. `_placement_oracle.py` certifies a *concrete* posed
@@ -544,7 +601,7 @@ comparison the generator makes:
 | straddle floor (#107, #129) | explicit preshape | margin `= 4·atol(scale)` |
 | pad band, line contact (#189) | sphere, cylinder side, torus side | `c = P/2` |
 | pad band, face contact (#189) | cylinder caps, box faces | `c = P/2` (`P < min(L, extent)`) |
-| encompassing band (#189) | sphere, cylinder side | `c = (L − r − P)/2` |
+| encompassing band (#189) | sphere, cylinder side | `c = (L − r − P)/2` (`2r ≥ L`) |
 
 The straddle floor is pinned on the **explicit-preshape** path, where the realized
 margin `preshape − span` is ulp-exact, and its boundary value is certified like any

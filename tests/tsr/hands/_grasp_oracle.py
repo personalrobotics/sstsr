@@ -49,7 +49,7 @@ Clause codes on :class:`GraspWitness`:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List, Optional, Tuple
+from typing import List, Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -658,6 +658,7 @@ def certify(
     pad_length: Optional[float] = None,
     min_encompassing_diameter: Optional[float] = None,
     grip: Optional[str] = None,
+    closed_reach: Optional[Sequence[Tuple[float, float]]] = None,
 ) -> GraspWitness:
     """Certify the soundness clauses for ``prim`` at end-effector ``pose``.
 
@@ -674,6 +675,9 @@ def certify(
     surfaces (#189); ``grip`` is the declared grip, a selector like ``mode``. A hand
     without pads must declare no grip; a hand with pads must declare ``"pad"`` or
     ``"encompassing"``, and clause 9 checks where on the finger the contacts fall.
+    ``closed_reach`` is the hand's declared ``((width, reach), ...)`` curve (#193): the
+    pads ride with the fingertips, so clause 9 measures from the fingertips closed on the
+    realized span, ``max(L, reach(span))`` past the palm; ``None`` for a prismatic jaw.
     """
     _validate_model(prim, finger_length, max_aperture, preshape, clearance, mode, approach, finger_orientation)
     pose_f, reason = _validate_pose(pose)
@@ -770,12 +774,17 @@ def certify(
     # checked against the realized pose geometry (clause 8); never trusted as input.
     failed.extend(_selector_failures(name, mode, a, y, p, approach, finger_orientation))
     if np.isfinite(span):
+        # The pads ride with the fingertips, which reach `gain` further once closed (#193).
+        gain = 0.0
+        if closed_reach is not None:
+            widths, reaches = zip(*closed_reach)
+            gain = max(0.0, float(np.interp(span, widths, reaches)) - finger_length)
         failed.extend(
             _grip_failures(
                 name,
                 mode,
-                finger_length - contact_distance,
-                cg.realized_depth,
+                finger_length + gain - contact_distance,
+                cg.realized_depth + gain,
                 span,
                 pad_length,
                 min_encompassing_diameter,
@@ -866,7 +875,8 @@ def _grip_failures(
 ) -> List[Tuple[int, str]]:
     """Clause 8/9 failures for where on the finger the contacts fall (#189).
 
-    ``behind_tip`` is the closing line's distance behind the fingertip, from the pose.
+    ``behind_tip`` is the closing line's distance behind the closed fingertip, from the pose;
+    ``realized_depth`` is a face contact's extent back from it.
     """
     if pad_length is None:
         return [(8, f"declared grip {grip!r} but the hand has no gripping surfaces")] if grip else []

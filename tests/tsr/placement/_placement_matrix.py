@@ -32,6 +32,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 import numpy as np
 from hypothesis import strategies as st
 
+from tsr import placement as shapes
 from tsr.placement import StablePlacer
 from tsr.placement._conformance import validate_builtin_placement_template
 from tsr.placement_provenance import PlacementProvenance
@@ -39,6 +40,8 @@ from tsr.placement_provenance import PlacementProvenance
 from ..hands._grasp_matrix import budget, bw_samples, matrix_settings  # noqa: F401  (re-exported)
 from ._placement_oracle import (
     Box,
+    Capsule,
+    Compound,
     Cylinder,
     Mesh,
     Sphere,
@@ -59,8 +62,9 @@ class Factory:
     name: str
     #: Build the oracle primitive from the factory's keyword arguments.
     oracle: Callable[[Dict[str, Any]], Any]
-    #: The ``primitive`` label this factory's provenance records must claim (#160).
-    primitive: str = ""
+    #: The ``primitive`` label this factory's provenance records must claim (#160), or a
+    #: function of the call's keyword arguments for a factory that chooses one.
+    primitive: Any = ""
     #: ``variant`` -> the outward object-frame normal of the face that must face down.
     #: Empty for factories whose variants are not face labels.
     #:
@@ -103,12 +107,43 @@ FACTORIES: Dict[str, Factory] = {
     "place_mesh": Factory(
         "place_mesh", lambda kw: Mesh(np.asarray(kw["vertices"], float), np.asarray(kw["com"], float)), "mesh"
     ),
+    "place": Factory("place", lambda kw: oracle_shape(kw["shape"]), lambda kw: shape_primitive(kw["shape"])),
 }
 
 
+def oracle_shape(shape) -> Compound:
+    """The oracle's body for a :class:`tsr.placement.Shape`, read from its public fields."""
+    parts = []
+    for p in shape.parts:
+        if isinstance(p, shapes.Box):
+            parts.append((Box(*p.size), p.pose))
+        elif isinstance(p, shapes.Cylinder):
+            parts.append((Cylinder(p.radius, p.height), p.pose))
+        elif isinstance(p, shapes.Sphere):
+            parts.append((Sphere(p.radius), p.pose))
+        elif isinstance(p, shapes.Capsule):
+            parts.append((Capsule(p.radius, p.length), p.pose))
+        else:
+            parts.append((Mesh(np.asarray(p.vertices), np.zeros(3)), np.eye(4)))
+    return Compound(tuple(parts), np.asarray(shape.com))
+
+
+def shape_primitive(shape) -> str:
+    """The primitive ``place`` documents for a shape: a lone box, cylinder or sphere whose
+    centre of mass is its centre is placed exactly, and anything else as a compound."""
+    (part, *rest) = shape.parts
+    single = not rest and isinstance(part, (shapes.Box, shapes.Cylinder, shapes.Sphere))
+    if single and np.linalg.norm(shape.com - part.centre) <= length_atol(oracle_shape(shape).scale):
+        return {shapes.Box: "box", shapes.Cylinder: "cylinder", shapes.Sphere: "sphere"}[type(part)]
+    return "compound"
+
+
 def public_factories() -> List[str]:
-    """Every public ``place_*`` method, so the matrix cannot silently miss one."""
-    return sorted(n for n in dir(StablePlacer) if n.startswith("place_") and callable(getattr(StablePlacer, n)))
+    """Every public placement factory, ``place`` and each ``place_*`` method, so the
+    matrix cannot silently miss one."""
+    return sorted(
+        n for n in dir(StablePlacer) if (n == "place" or n.startswith("place_")) and callable(getattr(StablePlacer, n))
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -140,6 +175,72 @@ class PlacementCase:
 
     def __str__(self) -> str:  # pragma: no cover - diagnostics only
         return self.label or f"{self.factory}({self.kwargs}) on table {self.table}"
+
+
+def _at(x: float, y: float, z: float) -> np.ndarray:
+    T = np.eye(4)
+    T[:3, 3] = x, y, z
+    return T
+
+
+def _turned(T: np.ndarray, axis: str, angle: float) -> np.ndarray:
+    from scipy.spatial.transform import Rotation
+
+    R = np.eye(4)
+    R[:3, :3] = Rotation.from_euler(axis, angle).as_matrix()
+    return T @ R
+
+
+#: Objects for ``place``, built in a frame with z up and the base at z = 0, as a model
+#: file holds them; ``place_shape`` then moves the object frame anywhere.
+SHAPE_KINDS = ("box", "cylinder", "sphere", "can", "bottle", "mug", "table", "hull", "capsule")
+
+
+def place_shape(kind: str, scale: float, T: Optional[np.ndarray] = None):
+    """A :class:`tsr.placement.Shape` of ``kind`` at ``scale``, in an object frame moved by
+    ``T`` (the parts at ``inv(T)`` of where they were). ``box``, ``cylinder`` and
+    ``sphere`` are one centred primitive; the rest are what collision models are made of.
+    """
+    T_new_old = np.linalg.inv(np.eye(4) if T is None else T)
+    s = scale
+
+    def at(pose):
+        return T_new_old @ pose
+
+    if kind == "box":
+        parts = [shapes.Box((0.2 * s, 0.1 * s, 0.3 * s), pose=at(np.eye(4)))]
+    elif kind == "cylinder":
+        parts = [shapes.Cylinder(0.04 * s, 0.12 * s, pose=at(np.eye(4)))]
+    elif kind == "sphere":
+        parts = [shapes.Sphere(0.05 * s, pose=at(np.eye(4)))]
+    elif kind == "can":  # its frame at the base's centre, as prl_assets' objects are
+        parts = [shapes.Cylinder(0.033 * s, 0.123 * s, pose=at(_at(0, 0, 0.0615 * s)))]
+    elif kind == "bottle":  # stacked cylinders: lying, it rolls
+        parts = [
+            shapes.Cylinder(0.04 * s, 0.15 * s, pose=at(_at(0, 0, 0.075 * s))),
+            shapes.Cylinder(0.03 * s, 0.03 * s, pose=at(_at(0, 0, 0.165 * s))),
+            shapes.Cylinder(0.015 * s, 0.04 * s, pose=at(_at(0, 0, 0.2 * s))),
+        ]
+    elif kind == "mug":  # a box body with a capsule handle out of its +x face
+        parts = [
+            shapes.Box((0.08 * s, 0.08 * s, 0.1 * s), pose=at(_at(0, 0, 0.05 * s))),
+            shapes.Capsule(0.008 * s, 0.05 * s, pose=at(_turned(_at(0.06 * s, 0, 0.05 * s), "x", np.pi / 2))),
+        ]
+    elif kind == "table":  # a top on four inset legs
+        parts = [shapes.Box((0.6 * s, 0.4 * s, 0.03 * s), pose=at(_at(0, 0, 0.735 * s)))]
+        parts += [
+            shapes.Box((0.04 * s, 0.04 * s, 0.72 * s), pose=at(_at(x * 0.25 * s, y * 0.15 * s, 0.36 * s)))
+            for x in (-1, 1)
+            for y in (-1, 1)
+        ]
+    elif kind == "hull":  # a convex hull part, as a decomposed scan is
+        cube = _mesh_vertices("cube", 0.1 * s)[0] + [0, 0, 0.05 * s]
+        parts = [shapes.Hull(cube, pose=at(np.eye(4)))]
+    elif kind == "capsule":  # rolls lying and topples standing: no rest
+        parts = [shapes.Capsule(0.02 * s, 0.1 * s, pose=at(np.eye(4)))]
+    else:
+        raise AssertionError(kind)
+    return shapes.Shape(parts)
 
 
 def _mesh_vertices(kind: str, scale: float) -> Tuple[np.ndarray, np.ndarray]:
@@ -196,6 +297,15 @@ def cases(draw, factories: Optional[Tuple[str, ...]] = None, fit: str = "any") -
     elif factory == "place_torus":
         major = dim(0.1, 0.5)
         kwargs = {"major_radius": major, "minor_radius": major * draw(st.floats(0.05, 0.9))}
+    elif factory == "place":
+        from .._hypothesis_strategies import transforms
+
+        frame = draw(transforms()) if draw(st.booleans()) else None
+        if frame is not None:
+            frame[:3, 3] *= 0.1 * scale  # the object frame moved within the object's scale
+        kwargs = {"shape": place_shape(draw(st.sampled_from(SHAPE_KINDS)), scale, frame)}
+        if fit == "fits":  # the table's top spans 0.36 of its scale in footprint
+            table = (max(table[0], 4.0 * scale), max(table[1], 4.0 * scale))
     else:
         vertices, com = _mesh_vertices(draw(st.sampled_from(["cube", "corner-cube", "slab", "tetra"])), scale)
         kwargs = {"vertices": vertices, "com": com}
@@ -248,6 +358,8 @@ def provenance_failures(case: PlacementCase, templates) -> List[str]:
     failures: List[str] = []
     prim = case.prim
     expected_primitive = FACTORIES[case.factory].primitive
+    if callable(expected_primitive):
+        expected_primitive = expected_primitive(case.kwargs)
     for t in templates:
         record = t.provenance
         if record is None:
@@ -367,9 +479,16 @@ def margin_failures(case: PlacementCase, templates) -> List[str]:
 ORDERED_FACTORIES = ("place_mesh",)
 
 
+def _ordered(case: PlacementCase) -> bool:
+    """``place`` orders its compound rests as ``place_mesh`` does."""
+    if case.factory == "place":
+        return FACTORIES["place"].primitive(case.kwargs) == "compound"
+    return case.factory in ORDERED_FACTORIES
+
+
 def ordering_failures(case: PlacementCase, templates) -> List[str]:
     """``place_mesh`` promises most-stable-first, judged by the reported angles."""
-    if case.factory not in ORDERED_FACTORIES:
+    if not _ordered(case):
         return []
     reported = [t.stability_margin for t in templates]
     if any(m is None for m in reported):
@@ -449,6 +568,10 @@ def float32_box(lx: float, ly: float, lz: float, seed: int = 0) -> np.ndarray:
 _OBTUSE_TETRA = np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.2, 0.15, 0.0], [0.9, 0.1, 1.0]])
 
 
+#: An object frame off every part and turned off every axis, for ``place``'s corpus.
+_MOVED = _turned(_at(0.03, -0.02, 0.05), "xyz", (0.4, -0.7, 1.1))
+
+
 def corpus() -> List[PlacementCase]:
     """A fixed case per factory plus the shapes that make a specific defect visible.
 
@@ -499,6 +622,25 @@ def corpus() -> List[PlacementCase]:
             1,
             "cube with its COM on a support edge",
         ),
+        # ``place`` (#201). The counts are what each object physically does: the can and
+        # the bottle stand on either end and roll lying down; the mug cannot rest on the
+        # face its handle stands out from; the table stands, lies on its top, or rests on
+        # one side's top edge and two feet; a capsule rolls or topples.
+        *[
+            PlacementCase("place", {"shape": place_shape(kind, 1.0, frame)}, (1.0, 1.0), count, f"place {kind}{label}")
+            for kind, count in (
+                ("box", 6),
+                ("cylinder", 2),
+                ("sphere", 1),
+                ("can", 2),
+                ("bottle", 2),
+                ("mug", 5),
+                ("table", 6),
+                ("hull", 6),
+                ("capsule", 0),
+            )
+            for frame, label in ((None, ""), (_MOVED, ", frame moved"))
+        ],
     ]
 
 

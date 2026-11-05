@@ -96,6 +96,17 @@ point for that measurement is listed explicitly (they are not interchangeable).
 | `Robotiq2F140` | 114 mm | 128 mm | palm (`grasp_site`, base_mount + 100 mm) → pad tip |
 | `Robotiq2F85` | 59 mm | 85 mm | palm (housing forward edge) → pad tip |
 | `FrankaHand` | 37 mm | 80 mm | palm (hand-body forward edge) → pad tip |
+| `KinovaJaco2TwoFinger` | 73 mm | 73 mm | palm (link_6 + 125 mm) → fingertips, closed on nothing |
+
+`finger_length` is the reach with the hand **open**, but for the JACO2. The two Robotiq
+hands are four-bar linkages whose pads swing forward as they close, so each also declares its
+measured reach closed to a width, `gripper.reach(width)` — 132 mm for the 2F-140 closed on
+72 mm — and its templates keep the closed fingertips inside the object as well as the open
+ones. The JACO2's underactuated fingers wrap around what they close on; fully open they splay
+with their tips only 37 mm past the palm, so its `finger_length` is the reach closed on
+nothing, where the fingertips meet, and its `reach(width)` rises to 78 mm. Only its cylinder
+grasps have been closed on in its model, so it is registered for cylinders only; its other
+generators are unverified.
 
 ```python
 import numpy as np
@@ -137,7 +148,27 @@ grasp_poses = [t.sample(mug_pose) for t in templates]
 
 #### Placing
 
-`StablePlacer` generates one TSR template per stable resting pose on a flat surface:
+`StablePlacer` generates one TSR template per stable resting pose on a flat surface.
+To place an object as it is built, typically its collision model, describe its parts in
+its own frame and call `place`; it chooses how to place them:
+
+```python
+from tsr.placement import Box, Capsule, Cylinder, Shape, StablePlacer
+
+placer = StablePlacer(table_x=0.60, table_y=0.40)
+
+can = Shape([Cylinder(0.033, 0.123, pose=T_can_cylinder)])     # framed at its base
+mug = Shape([Box((0.08, 0.08, 0.10), pose=T_mug_body),
+             Capsule(0.008, 0.05, pose=T_mug_handle)], com=com)
+templates = placer.place(can)    # placed exactly by place_cylinder, framed at the can's origin
+templates = placer.place(mug)    # the hull's faces the true parts support, most stable first
+```
+
+A lone box, cylinder or sphere whose centre of mass is its centre is placed exactly by
+its own factory, wherever it sits in the object frame. Anything else (several parts, hulls,
+capsules) rests on the faces of its convex hull that the true parts support: a curved part
+contributes no rest where it touches along a line or at a point, since the object would roll
+there. The factories `place` uses are public too:
 
 ```python
 import numpy as np

@@ -199,6 +199,11 @@ class GripperSpec:
             return {"pad_length": g.pad_length, "min_encompassing_diameter": g.min_encompassing_diameter}
         return {"pad_length": self.pad_length, "min_encompassing_diameter": self.min_encompassing_diameter}
 
+    @property
+    def oracle_hand(self) -> Dict[str, object]:
+        """What the oracle takes of the hand beyond L and A: its surfaces and closed reach (#193)."""
+        return {**self.surfaces, "closed_reach": self.build().CLOSED_REACH}
+
     def with_dims(self, finger_length: float, max_aperture: float) -> "GripperSpec":
         return GripperSpec("ParallelJawGripper", finger_length, max_aperture)
 
@@ -363,7 +368,8 @@ def boundary_clearances(
     if pad_length is not None:
         cands.append(pad_length / 2)  # the pad band closes at c == P/2 (#189)
         if primitive in ("sphere", "cylinder"):
-            cands.append((L - _radius(dims) - pad_length) / 2)  # the encompassing band
+            r = _radius(dims)
+            cands.append((min(L, 2 * r) - r - pad_length) / 2)  # the encompassing band
 
     del name
     return [c for c in cands if c >= 0.0 and math.isfinite(c)]
@@ -435,7 +441,7 @@ def certify_pose(case: GraspCase, t, pose, *, prim=None, approach: Optional[str]
         approach=approach if approach is not None else p.approach,
         finger_orientation=p.finger_orientation,
         grip=p.grip,
-        **case.gripper.surfaces,
+        **case.gripper.oracle_hand,
     )
 
 
@@ -574,7 +580,7 @@ def symmetry_failures(case: GraspCase, templates, theta: float = 0.7) -> List[st
                     approach=label_map.get(p.approach, p.approach),
                     finger_orientation=p.finger_orientation,
                     grip=p.grip,
-                    **case.gripper.surfaces,
+                    **case.gripper.oracle_hand,
                 )
                 if not w.ok:
                     out.append(f"{_label(t)} under {name}: {w.failed}")
@@ -799,7 +805,9 @@ _CORPUS_DIMS = {
     "sphere": {"object_radius": 0.02},
     "cylinder": {"cylinder_radius": 0.02, "cylinder_height": 0.12},
     "box": {"box_x": 0.05, "box_y": 0.04, "box_z": 0.06},
-    "torus": {"torus_radius": 0.03, "tube_radius": 0.01},
+    # A tube thick enough that the 2F-85's fingertips, closed across it, stay inside its far
+    # side (#193), on a ring small enough that its outer diameter still fits the 2F-85.
+    "torus": {"torus_radius": 0.022, "tube_radius": 0.018},
 }
 
 
@@ -1135,16 +1143,17 @@ BOUNDARIES: Tuple[Boundary, ...] = (
         surfaces=lambda s: {"pad_length": 0.0625 * s},
     ),
     # Encompassing band (#189): contacts c behind the pads with the palm c outside, so
-    # [r + P + c, L - c] closes at c == (L - r - P)/2.
+    # [r + P + c, L - c] closes at c == (L - r - P)/2. The radius is wide enough (2r > L)
+    # that the palm, not the far surface (#193), sets the deep end.
     Boundary(
         name="encompassing_band",
         factories=("grasp_sphere", "grasp_cylinder_side", "grasp_cylinder"),
-        setup=lambda s, f: _radial_setup(s, f, 0.5, 0.0625),
+        setup=lambda s, f: _radial_setup(s, f, 0.25, 0.15),
         clearance=lambda L, A, d, f: (L - _radius(d) - L / 4) / 2,  # P = L/4
         family=lambda p: p.grip == "encompassing",
         # c is added to r on both band ends, where one ulp of c is lost: step relatively.
         relative_step=True,
-        surfaces=lambda s: {"pad_length": 0.125 * s, "min_encompassing_diameter": 0.0625 * s},
+        surfaces=lambda s: {"pad_length": 0.0625 * s, "min_encompassing_diameter": 0.0625 * s},
     ),
     # Scale-aware straddle floor: the default preshape span + c clears each pad by
     # 2*atol only for c >= 4*length_atol(scale) (#107, #129). Feasible ABOVE it.

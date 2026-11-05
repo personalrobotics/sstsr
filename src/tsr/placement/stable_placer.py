@@ -16,11 +16,13 @@ from dataclasses import dataclass
 from typing import Callable, List
 
 import numpy as np
+from scipy.spatial import ConvexHull, QhullError
 
 from ..core.utils import length_atol
 from ..placement_provenance import PlacementProvenance
 from ..template import TSRTemplate
-from ._stable_poses import _rotation_to_align, stable_poses_mesh
+from ._stable_poses import _inward_distance, _plane_basis, _rotation_to_align, stable_poses_mesh
+from .shape import Box, Cylinder, Shape, Sphere
 
 logger = logging.getLogger(__name__)
 
@@ -680,3 +682,188 @@ class StablePlacer:
                 )
             )
         return templates
+
+    # ------------------------------------------------------------------
+    # An object as a whole: whatever parts it is made of
+    # ------------------------------------------------------------------
+
+    def place(self, shape: Shape, subject: str = "object", min_margin_deg: float = 0.0) -> List[TSRTemplate]:
+        """Return one template per stable rest of an object described by its parts (#201).
+
+        The caller describes the object, typically its collision model, as a
+        :class:`~tsr.placement.Shape`, and need not know which method places it:
+
+        * **One box, cylinder or sphere** whose centre of mass is its centre is placed
+          exactly by :meth:`place_box`, :meth:`place_cylinder` or :meth:`place_sphere`,
+          wherever the part sits in the object frame. A sphere off the object origin keeps
+          the object's own roll and pitch, since rolling it would move that origin.
+        * **Anything else** rests on a face of its convex hull. Candidate faces come from
+          points on the parts' surfaces, and each is kept only if the **true** parts
+          support it: the resting height is the parts' exact support, and the contact
+          patch is the parts' own points on that plane, a cylinder's cap as its inscribed
+          polygon. A curved part sampled into points would otherwise invent narrow faces
+          where the real object touches along a line or at a point and rolls; those are
+          not rests, so a lying cylinder or a capsule contributes none. A rest whose
+          contact meets a curved part at a single tangent point between samples can be
+          missed; none is invented.
+
+        Every template frames the object origin, with ``Tw_e`` a pure rotation and the
+        footprint taken about that origin. Results from the general path are sorted by
+        descending stability margin, as :meth:`place_mesh`'s are.
+
+        Args:
+            shape: The object's parts and centre of mass, in the object frame.
+            subject: Name of the object frame.
+            min_margin_deg: Discard rests whose tipping angle is below this (degrees).
+
+        Returns:
+            The templates, or ``[]`` when no rest is stable enough and fits on the
+            surface, with the reason logged at ``DEBUG``.
+        """
+        if not isinstance(shape, Shape):
+            raise ValueError(f"shape must be a tsr.placement.Shape, got {type(shape).__name__}")
+        _check_finite("min_margin_deg", min_margin_deg)
+        surface = shape.surface()
+        scale = float(np.ptp(surface, axis=0).max())
+        part = shape.parts[0] if len(shape.parts) == 1 else None
+        if isinstance(part, (Box, Cylinder, Sphere)) and np.linalg.norm(shape.com - part.centre) <= length_atol(scale):
+            return self._place_part(part, subject, min_margin_deg, scale)
+        return self._place_parts(shape, surface, subject, min_margin_deg, scale)
+
+    def _place_part(self, part, subject: str, min_margin_deg: float, scale: float) -> List[TSRTemplate]:
+        """A single primitive, placed by its exact factory in its own frame and re-framed
+        at the object origin."""
+        if isinstance(part, Box):
+            primitive = "box"
+            templates = self.place_box(*part.size, subject=subject, min_margin_deg=min_margin_deg)
+        elif isinstance(part, Cylinder):
+            primitive = "cylinder"
+            templates = self.place_cylinder(part.radius, part.height, subject=subject, min_margin_deg=min_margin_deg)
+        else:
+            primitive = "sphere"
+            templates = self.place_sphere(part.radius, subject=subject, min_margin_deg=min_margin_deg)
+        R_object_part, t_object_part = part.pose[:3, :3], part.pose[:3, 3]
+        centred = np.linalg.norm(t_object_part) <= length_atol(scale)
+        out = []
+        for t in templates:
+            # The object's rotation once the part rests. A sphere's own rotation means
+            # nothing, so a sphere leaves the object as it is framed.
+            R = np.eye(3) if primitive == "sphere" else t.Tw_e[:3, :3] @ R_object_part.T
+            height = float(t.T_ref_tsr[2, 3] - (R @ t_object_part)[2])
+            footprint = part.reach(R)
+            if not self._fits(footprint, scale):
+                continue
+            record = t.provenance
+            normal = None if record.face_normal is None else R_object_part @ np.asarray(record.face_normal)
+            free = np.array([-np.pi, np.pi]) if primitive == "sphere" and centred else None
+            out.append(
+                self._template(
+                    name=t.name,
+                    description=t.description,
+                    variant=t.variant if normal is None else _face_label(normal, f"{primitive} {t.variant}"),
+                    R=R,
+                    origin_height=height,
+                    Bw=self._bw(footprint, roll_range=free, pitch_range=free),
+                    subject=subject,
+                    stability_margin=t.stability_margin,
+                    provenance=_placement_record(
+                        primitive,
+                        face_normal=normal,
+                        support_margin=record.support_margin,
+                        com_height=record.com_height,
+                        footprint_radius=footprint,
+                    ),
+                )
+            )
+        if templates and not out:
+            return self._log_empty("place", "exceeds_surface", "no rest's footprint about the object origin fits")
+        return out
+
+    def _place_parts(
+        self, shape: Shape, surface: np.ndarray, subject: str, min_margin_deg: float, scale: float
+    ) -> List[TSRTemplate]:
+        """A compound, or a part placed off its centre of mass: rests on its convex hull's
+        faces that the true parts support."""
+        atol = length_atol(scale)
+        com = shape.com
+        candidates = list(stable_poses_mesh(surface, com))
+        rests = []
+        for face in candidates:
+            n = np.asarray(face.face_normal, dtype=float)
+            h = shape.support(n)
+            com_height = h - float(np.dot(com, n))
+            if com_height <= atol:
+                continue
+            contact = np.vstack([p.contact(n, h, atol) for p in shape.parts])
+            basis = _plane_basis(n)
+            points = contact @ basis
+            try:
+                polygon = points[ConvexHull(points).vertices]
+            except (QhullError, ValueError):
+                continue  # a line or point of contact: the object rolls, it does not rest
+            d_min = _inward_distance(com @ basis, polygon)
+            if d_min <= atol:
+                continue
+            rests.append((face, n, h, com_height, d_min, float(np.arctan2(d_min, com_height))))
+        stable = [r for r in rests if r[5] >= np.radians(min_margin_deg)]
+        if not stable:
+            return self._log_empty(
+                "place",
+                "no_stable_face" if not rests else "below_min_margin",
+                f"{len(rests)} stable rest(s), none with margin >= {min_margin_deg:.4g}°",
+            )
+        stable.sort(key=lambda r: -r[5])
+        usable = []
+        for face, n, h, com_height, d_min, margin in stable:
+            R = _rotation_to_align(n, _NEG_Z)
+            footprint = shape.reach(R)
+            if self._fits(footprint, scale):
+                usable.append((face, n, h, com_height, d_min, margin, R, footprint))
+        if not usable:
+            return self._log_empty(
+                "place",
+                "exceeds_surface",
+                f"all {len(stable)} rest(s) exceed surface half-extent min({self.table_x:.4g}, {self.table_y:.4g}) m",
+            )
+        templates = []
+        for index, (face, n, h, com_height, d_min, margin, R, footprint) in enumerate(usable):
+            deg = float(np.degrees(margin))
+            templates.append(
+                self._template(
+                    name=f"Place rest {index + 1}/{len(usable)} ({subject} on {self.reference}, margin {deg:.1f}°)",
+                    description=(
+                        f"Object resting on hull face {index + 1} of {len(usable)} "
+                        f"(stability margin {deg:.1f}°) on {self.reference}."
+                    ),
+                    variant=f"face-{index + 1}",
+                    R=R,
+                    origin_height=h,
+                    Bw=self._bw(footprint),
+                    subject=subject,
+                    stability_margin=margin,
+                    provenance=_placement_record(
+                        "compound",
+                        face_normal=n,
+                        support_margin=d_min,
+                        com_height=com_height,
+                        footprint_radius=footprint,
+                        face_index=index,
+                        face_count=len(usable),
+                        facet_count=face.facet_count,
+                    ),
+                )
+            )
+        return templates
+
+
+_AXIS_LABELS = {(0, -1.0): "-x", (0, 1.0): "+x", (1, -1.0): "-y", (1, 1.0): "+y", (2, -1.0): "-z", (2, 1.0): "+z"}
+
+
+def _face_label(normal: np.ndarray, part_face: str) -> str:
+    """The face a variant names, since the label is a claim about the face: ``"-z"`` and
+    the like for an object-frame face along an axis, and otherwise the part's own face
+    (``"box -z"``), which stays the same face whatever else is filtered out."""
+    axis = int(np.argmax(np.abs(normal)))
+    if abs(abs(normal[axis]) - 1.0) <= 1e-9:
+        return _AXIS_LABELS[(axis, float(np.sign(normal[axis])))]
+    return part_face

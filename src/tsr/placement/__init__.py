@@ -13,8 +13,16 @@ Usage::
                                       subject="mug")
     tsr  = templates[0].instantiate(surface_pose)
     pose = tsr.sample()
+
+An object described by its parts, in its own frame, is placed whatever they are::
+
+    from tsr.placement import Box, Cylinder, Shape
+
+    shape     = Shape([Cylinder(0.033, 0.123, pose=T_object_can)])
+    templates = placer.place(shape)
 """
 
+from .shape import Box, Capsule, Cylinder, Hull, Shape, Sphere
 from .stable_placer import StablePlacer
 
-__all__ = ["StablePlacer"]
+__all__ = ["Box", "Capsule", "Cylinder", "Hull", "Shape", "Sphere", "StablePlacer"]

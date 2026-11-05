@@ -1,0 +1,565 @@
+{
+ "cases": {
+  "FrankaHand/grasp_box_bottom/(0.03, 0.05, 0.015)/clearance=0.002": {
+   "count": 6,
+   "sha256": "290afdad952841948d977ca418c6913493ea87cadfad1cae0aa631914b1cfc57"
+  },
+  "FrankaHand/grasp_box_bottom/(0.03, 0.05, 0.015)/clearance=0.006": {
+   "count": 6,
+   "sha256": "deb17381312e53fc56928627673f973498674c96eecc9f9f081dd54e495b26ab"
+  },
+  "FrankaHand/grasp_box_bottom/(0.04, 0.05, 0.06)/default": {
+   "count": 6,
+   "sha256": "7774dfeae6e7b3e308529dfe4363187ccf60ec4b4cd4a9f115c2bf80fe16bca5"
+  },
+  "FrankaHand/grasp_box_bottom/(0.05, 0.06, 0.12)/default": {
+   "count": 6,
+   "sha256": "85d1fc6ad3b4b8cccb904f70a3cdf71e3486d354dea08ca8a76efd777259d9cb"
+  },
+  "FrankaHand/grasp_box_bottom/(0.06, 0.04, 0.1)/clearance=0.002": {
+   "count": 6,
+   "sha256": "a74e17295fca133f27f9db4563a73f8b37c04f2d8f3f678b082cc2e3393bdfb4"
+  },
+  "FrankaHand/grasp_box_bottom/(0.06, 0.04, 0.1)/clearance=0.006": {
+   "count": 6,
+   "sha256": "5e1898c61d5453644f277d871f14add538813fb14a3eff8c734061d14aab62fa"
+  },
+  "FrankaHand/grasp_box_bottom/(0.07, 0.07, 0.07)/default": {
+   "count": 6,
+   "sha256": "562e2c019266e6888c890d7338b99d093dec8d401f37f429589c77eba07e9fb1"
+  },
+  "FrankaHand/grasp_box_bottom/(0.072, 0.088, 0.028)/clearance=0.002": {
+   "count": 3,
+   "sha256": "6c07af368ea1336191cfb16216eb9229b20bb712099c4dca641f31dce8067204"
+  },
+  "FrankaHand/grasp_box_bottom/(0.072, 0.088, 0.028)/clearance=0.006": {
+   "count": 3,
+   "sha256": "e4245ac4310e764a37b01e4ffc7d4a59899415bb2a6822a0c6029c37af11922c"
+  },
+  "FrankaHand/grasp_box_bottom/(0.115, 0.115, 0.115)/clearance=0.002": {
+   "count": 0,
+   "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  },
+  "FrankaHand/grasp_box_bottom/(0.115, 0.115, 0.115)/clearance=0.006": {
+   "count": 0,
+   "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  },
+  "FrankaHand/grasp_box_bottom/(0.115, 0.115, 0.115)/default": {
+   "count": 0,
+   "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  },
+  "FrankaHand/grasp_box_bottom/(0.12, 0.03, 0.2)/default": {
+   "count": 3,
+   "sha256": "71e725c23c1d200768483e5c4216f8f1f60ce0736526efea41b81be62e5c7b8d"
+  },
+  "FrankaHand/grasp_box_face_x/(0.03, 0.05, 0.015)/clearance=0.002": {
+   "count": 12,
+   "sha256": "c568c4353d7d9d2aecb087f6261eabc08324dc38f04a647f8c94e7c274f6477d"
+  },
+  "FrankaHand/grasp_box_face_x/(0.03, 0.05, 0.015)/clearance=0.006": {
+   "count": 12,
+   "sha256": "28d3850f6f54e4780cb6ad369a1f6ff82a9723de078256b3b1c1b779a73ed0e1"
+  },
+  "FrankaHand/grasp_box_face_x/(0.04, 0.05, 0.06)/default": {
+   "count": 12,
+   "sha256": "82c4437bf0fbc819c4a1528d635b68f89eadd8fb72e62e79bf8dd52cd2514186"
+  },
+  "FrankaHand/grasp_box_face_x/(0.05, 0.06, 0.12)/default": {
+   "count": 6,
+   "sha256": "5405ff15eb0013808115b94f2e28d617c33f2ce07a3a8ed88a3e945c8c0f624d"
+  },
+  "FrankaHand/grasp_box_face_x/(0.06, 0.04, 0.1)/clearance=0.002": {
+   "count": 6,
+   "sha256": "0f98628d3128b687689c55b9211523fab850f872fd0ab30a5ffb22c242e277ef"
+  },
+  "FrankaHand/grasp_box_face_x/(0.06, 0.04, 0.1)/clearance=0.006": {
+   "count": 6,
+   "sha256": "2dc2924159e2ce5a4ee95067af8075eaa2aab4d8d1d3234832b9d96d33e60c8c"
+  },
+  "FrankaHand/grasp_box_face_x/(0.07, 0.07, 0.07)/default": {
+   "count": 12,
+   "sha256": "cd1f12c29ff82f1dbe2b6928f28a8bfa7e3f9c5297db9917ad1a6eda4f6be4d0"
+  },
+  "FrankaHand/grasp_box_face_x/(0.072, 0.088, 0.028)/clearance=0.002": {
+   "count": 6,
+   "sha256": "cc12f04178481659198244e1b6ecb2d61b80b9e071d9615077947ec425052134"
+  },
+  "FrankaHand/grasp_box_face_x/(0.072, 0.088, 0.028)/clearance=0.006": {
+   "count": 6,
+   "sha256": "60efe41526ea9ec50bc634e3e68c47fbec555ffaefd54e778493c1d31855d357"
+  },
+  "FrankaHand/grasp_box_face_x/(0.115, 0.115, 0.115)/clearance=0.002": {
+   "count": 0,
+   "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  },
+  "FrankaHand/grasp_box_face_x/(0.115, 0.115, 0.115)/clearance=0.006": {
+   "count": 0,
+   "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  },
+  "FrankaHand/grasp_box_face_x/(0.115, 0.115, 0.115)/default": {
+   "count": 0,
+   "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  },
+  "FrankaHand/grasp_box_face_x/(0.12, 0.03, 0.2)/default": {
+   "count": 6,
+   "sha256": "b31ae1d639574164de4027ac09a35613e20ed1f77bc178a63575e31f2e766775"
+  },
+  "FrankaHand/grasp_box_face_y/(0.03, 0.05, 0.015)/clearance=0.002": {
+   "count": 12,
+   "sha256": "73e77d70733202ce0e9f0c7bfb12b9a509f690ff4c289c6d627345176d21b646"
+  },
+  "FrankaHand/grasp_box_face_y/(0.03, 0.05, 0.015)/clearance=0.006": {
+   "count": 12,
+   "sha256": "340dd2b0a04cfa145fe62e8e014b1a7fdece2dae385ff1d24c7e589f71be646c"
+  },
+  "FrankaHand/grasp_box_face_y/(0.04, 0.05, 0.06)/default": {
+   "count": 12,
+   "sha256": "8641e0de6a9417f3aab109d4cb22844bbe93de19070c1d08528c027a73a01cfd"
+  },
+  "FrankaHand/grasp_box_face_y/(0.05, 0.06, 0.12)/default": {
+   "count": 6,
+   "sha256": "c316bdcd1af88b0092a900617c76fd0799269a9ad844b4638397cfec2a1a7dd6"
+  },
+  "FrankaHand/grasp_box_face_y/(0.06, 0.04, 0.1)/clearance=0.002": {
+   "count": 6,
+   "sha256": "7b1a7e17c490c41d1e4208da50ca7b9a01d0df9892e98ed8160217196ed34649"
+  },
+  "FrankaHand/grasp_box_face_y/(0.06, 0.04, 0.1)/clearance=0.006": {
+   "count": 6,
+   "sha256": "67b08072ba62fae41fbdd28f4cdd483668174a6ebfb4d84d22128b7c3f85f2e9"
+  },
+  "FrankaHand/grasp_box_face_y/(0.07, 0.07, 0.07)/default": {
+   "count": 12,
+   "sha256": "60b0fe55eb216218c6350127e5cd1130a58148bd0ecb0798cd7e942a2008fc64"
+  },
+  "FrankaHand/grasp_box_face_y/(0.072, 0.088, 0.028)/clearance=0.002": {
+   "count": 12,
+   "sha256": "dd8e7f09d69c11f30c63645c494d015db85bb5334eedc212b7674ccb6f425423"
+  },
+  "FrankaHand/grasp_box_face_y/(0.072, 0.088, 0.028)/clearance=0.006": {
+   "count": 12,
+   "sha256": "9da3dd2dc70743138b00b7560dd6b5d70734566a742adb3aa0fb08cb339eff69"
+  },
+  "FrankaHand/grasp_box_face_y/(0.115, 0.115, 0.115)/clearance=0.002": {
+   "count": 0,
+   "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  },
+  "FrankaHand/grasp_box_face_y/(0.115, 0.115, 0.115)/clearance=0.006": {
+   "count": 0,
+   "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  },
+  "FrankaHand/grasp_box_face_y/(0.115, 0.115, 0.115)/default": {
+   "count": 0,
+   "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  },
+  "FrankaHand/grasp_box_top/(0.03, 0.05, 0.015)/clearance=0.002": {
+   "count": 6,
+   "sha256": "cb59288b17f7cba71c5e1fd6f5129dfbd69cf2c70e2fedcb9328eb299d246374"
+  },
+  "FrankaHand/grasp_box_top/(0.03, 0.05, 0.015)/clearance=0.006": {
+   "count": 6,
+   "sha256": "c576ee81ecce6383dc0fbc7625ab0ca2bcc00885f69378e0f8b036c0a08e73a3"
+  },
+  "FrankaHand/grasp_box_top/(0.04, 0.05, 0.06)/default": {
+   "count": 6,
+   "sha256": "4f75d8ac7ab0628c50c6b063abe1dfd1d1e6ad303456df137cd7012594f00f74"
+  },
+  "FrankaHand/grasp_box_top/(0.05, 0.06, 0.12)/default": {
+   "count": 6,
+   "sha256": "244747d936933866ebebbe9f0c6d41261a619efa4cb6475137478b11a304a0c8"
+  },
+  "FrankaHand/grasp_box_top/(0.06, 0.04, 0.1)/clearance=0.002": {
+   "count": 6,
+   "sha256": "4d0b3b95b4032499feb678a05d0e6cc0621e03cb8688e3172a410cf554c409dc"
+  },
+  "FrankaHand/grasp_box_top/(0.06, 0.04, 0.1)/clearance=0.006": {
+   "count": 6,
+   "sha256": "61d43acb7de4e5b2fb86cb3b362356762eab8db5e7f5870e19f805f108959eda"
+  },
+  "FrankaHand/grasp_box_top/(0.07, 0.07, 0.07)/default": {
+   "count": 6,
+   "sha256": "a4c3419b5574826b97822fe3b8eb8d3a2c51f322494c0ec8fd9924265eeb563e"
+  },
+  "FrankaHand/grasp_box_top/(0.072, 0.088, 0.028)/clearance=0.002": {
+   "count": 3,
+   "sha256": "bddb947ed9334b5da910404181c78eed27a03c32b97ce07a8cc1fdfd7b898122"
+  },
+  "FrankaHand/grasp_box_top/(0.072, 0.088, 0.028)/clearance=0.006": {
+   "count": 3,
+   "sha256": "9977f8daf2cb8baa8db414cf10ad13b31fb25a4bb7f53d8cd6a5e6c4ba4c796e"
+  },
+  "FrankaHand/grasp_box_top/(0.115, 0.115, 0.115)/clearance=0.002": {
+   "count": 0,
+   "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  },
+  "FrankaHand/grasp_box_top/(0.115, 0.115, 0.115)/clearance=0.006": {
+   "count": 0,
+   "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  },
+  "FrankaHand/grasp_box_top/(0.115, 0.115, 0.115)/default": {
+   "count": 0,
+   "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  },
+  "FrankaHand/grasp_box_top/(0.12, 0.03, 0.2)/default": {
+   "count": 3,
+   "sha256": "b8d379360f504748225bffbe9a0d510eabccd56f273a6d8c2061a3a2c1463a5a"
+  },
+  "Robotiq2F140/grasp_box_bottom/(0.03, 0.05, 0.015)/clearance=0.002": {
+   "count": 0,
+   "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  },
+  "Robotiq2F140/grasp_box_bottom/(0.03, 0.05, 0.015)/clearance=0.006": {
+   "count": 0,
+   "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  },
+  "Robotiq2F140/grasp_box_bottom/(0.05, 0.06, 0.12)/default": {
+   "count": 6,
+   "sha256": "303036584e2b70f3107a8c77611f0c8c6ea76664ef6357af1f3f21eeff0e9d5f"
+  },
+  "Robotiq2F140/grasp_box_bottom/(0.06, 0.04, 0.1)/clearance=0.002": {
+   "count": 6,
+   "sha256": "a985118c8bab883c7619a9eb50d8c6ce55eadbf0a695efb76adf93d4dc882f93"
+  },
+  "Robotiq2F140/grasp_box_bottom/(0.06, 0.04, 0.1)/clearance=0.006": {
+   "count": 6,
+   "sha256": "f441414d9b1ebaacbcd29070d95868ccf78ea5c508e2562d7a8ac159e4a2d217"
+  },
+  "Robotiq2F140/grasp_box_bottom/(0.072, 0.088, 0.028)/clearance=0.002": {
+   "count": 6,
+   "sha256": "9d2225eab79ad99aeb58d2c875e4f97d71016b0c1e68911e586b13a95de75e05"
+  },
+  "Robotiq2F140/grasp_box_bottom/(0.072, 0.088, 0.028)/clearance=0.006": {
+   "count": 3,
+   "sha256": "4762ac04e4ebb3c66995060206281666903071611ac081f2dc3f1b565eea5cd2"
+  },
+  "Robotiq2F140/grasp_box_bottom/(0.115, 0.115, 0.115)/clearance=0.002": {
+   "count": 6,
+   "sha256": "cba8c1bd1936d04755d7f88c4e15d0bad7d1f7633eafda80f20573de4c30480e"
+  },
+  "Robotiq2F140/grasp_box_bottom/(0.115, 0.115, 0.115)/clearance=0.006": {
+   "count": 6,
+   "sha256": "99379ef96989ab0332820dd264539d10d98d036e2d5e2c3aa2b0608c38b6b5d1"
+  },
+  "Robotiq2F140/grasp_box_bottom/(0.115, 0.115, 0.115)/default": {
+   "count": 6,
+   "sha256": "24f1224f266c2ee24a406c4ea2a2cc77a1d3d3f2ce441492d770c33094776f19"
+  },
+  "Robotiq2F140/grasp_box_bottom/(0.12, 0.03, 0.2)/default": {
+   "count": 3,
+   "sha256": "d3bcb6e1aaa4553ea157bfa41c0c9df212479f8ccd1cf6bf13d9d7c2d2657c03"
+  },
+  "Robotiq2F140/grasp_box_face_x/(0.03, 0.05, 0.015)/clearance=0.002": {
+   "count": 12,
+   "sha256": "6da2ba9f9d9cc44ce5c61dd44239ba15da73b4ae34d81f484cec103ae7e7aed7"
+  },
+  "Robotiq2F140/grasp_box_face_x/(0.03, 0.05, 0.015)/clearance=0.006": {
+   "count": 0,
+   "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  },
+  "Robotiq2F140/grasp_box_face_x/(0.06, 0.04, 0.1)/clearance=0.002": {
+   "count": 12,
+   "sha256": "7b02513ac38fb7b264e8a261d4d67006dd72cc8183eb58a0948cfe1fe552e91d"
+  },
+  "Robotiq2F140/grasp_box_face_x/(0.06, 0.04, 0.1)/clearance=0.006": {
+   "count": 12,
+   "sha256": "24fb196ecdc9b5c7ca08ec6a6820dc1732cc1bdcea4f3cb4319539a8d21213b1"
+  },
+  "Robotiq2F140/grasp_box_face_x/(0.072, 0.088, 0.028)/clearance=0.002": {
+   "count": 12,
+   "sha256": "fc47c836f422b5e2b275f3cfb5b8a210f1e552e70624c0fad3af2222d2f4444e"
+  },
+  "Robotiq2F140/grasp_box_face_x/(0.072, 0.088, 0.028)/clearance=0.006": {
+   "count": 12,
+   "sha256": "491283b908101973fb2cd5f5c71d46628a4577742baac66a53c18d3d5acd8100"
+  },
+  "Robotiq2F140/grasp_box_face_x/(0.115, 0.115, 0.115)/clearance=0.002": {
+   "count": 12,
+   "sha256": "69018473440ebb08183ec47dab8abf8fdb5513e4872011c12a7d16132b10041f"
+  },
+  "Robotiq2F140/grasp_box_face_x/(0.115, 0.115, 0.115)/clearance=0.006": {
+   "count": 12,
+   "sha256": "96110d55dca4ec7224bea6810db1e1f44ff10c39247512ac130af1a8bb715020"
+  },
+  "Robotiq2F140/grasp_box_face_x/(0.115, 0.115, 0.115)/default": {
+   "count": 12,
+   "sha256": "e4ff857546da813944522ea18d3e406dfbc42ecf35acfec749aa1f0f8f9bc94b"
+  },
+  "Robotiq2F140/grasp_box_face_x/(0.12, 0.03, 0.2)/default": {
+   "count": 6,
+   "sha256": "b04a6127522bd9312982c1e4c8e1992195bea9a4e4a3f20263fb4e70c0d07437"
+  },
+  "Robotiq2F140/grasp_box_face_y/(0.03, 0.05, 0.015)/clearance=0.002": {
+   "count": 12,
+   "sha256": "9c3b31fb7302b7d35f25f9beb1d4fc7ec3ef9220e49f86217f17a8917a3da9c5"
+  },
+  "Robotiq2F140/grasp_box_face_y/(0.03, 0.05, 0.015)/clearance=0.006": {
+   "count": 12,
+   "sha256": "2ab599a0842cba347a1ee8862d05e4ceec34a5263cb6deb94be31f02c0fb1786"
+  },
+  "Robotiq2F140/grasp_box_face_y/(0.06, 0.04, 0.1)/clearance=0.002": {
+   "count": 12,
+   "sha256": "78848ada672c511cafa94f5482a750663a25a992511f228f7a615ee9b928fd86"
+  },
+  "Robotiq2F140/grasp_box_face_y/(0.06, 0.04, 0.1)/clearance=0.006": {
+   "count": 12,
+   "sha256": "e076a001a17caf84e09e7e2cdc2e9f520a7f0209ee48e2bdb4e732da03fe3441"
+  },
+  "Robotiq2F140/grasp_box_face_y/(0.072, 0.088, 0.028)/clearance=0.002": {
+   "count": 12,
+   "sha256": "f1910583dbc6faf9eac8aa6076652a275f432c7550a08e2c38253f0dfa74a784"
+  },
+  "Robotiq2F140/grasp_box_face_y/(0.072, 0.088, 0.028)/clearance=0.006": {
+   "count": 12,
+   "sha256": "359b2b81aa426ed16e1881e6ba738fb550e003b12f1c1056456178b885ac8e28"
+  },
+  "Robotiq2F140/grasp_box_face_y/(0.115, 0.115, 0.115)/clearance=0.002": {
+   "count": 12,
+   "sha256": "6ae4ef7bea8999b043204fc24edd02a4f28c68537e5018803ac74bb48020ed81"
+  },
+  "Robotiq2F140/grasp_box_face_y/(0.115, 0.115, 0.115)/clearance=0.006": {
+   "count": 12,
+   "sha256": "e182d3c90bcaaaca3fad9b25f264b957b0e0830b3911d957ec3d522f25c0c8c7"
+  },
+  "Robotiq2F140/grasp_box_face_y/(0.115, 0.115, 0.115)/default": {
+   "count": 12,
+   "sha256": "2df0d34bd79a6072ff4f971de839f3eda76a1c9e6ebe1af8941f1c64e21e7a27"
+  },
+  "Robotiq2F140/grasp_box_top/(0.03, 0.05, 0.015)/clearance=0.002": {
+   "count": 0,
+   "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  },
+  "Robotiq2F140/grasp_box_top/(0.03, 0.05, 0.015)/clearance=0.006": {
+   "count": 0,
+   "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  },
+  "Robotiq2F140/grasp_box_top/(0.05, 0.06, 0.12)/default": {
+   "count": 6,
+   "sha256": "1f61312c8f57d550fa3a239e183170d7b0a31f7b85a5a1347a9d3de23ca4a1b1"
+  },
+  "Robotiq2F140/grasp_box_top/(0.06, 0.04, 0.1)/clearance=0.002": {
+   "count": 6,
+   "sha256": "e560c2014d96f54579ef2a28f03c53a6e97db8d663cf271d286dd07c76a02418"
+  },
+  "Robotiq2F140/grasp_box_top/(0.06, 0.04, 0.1)/clearance=0.006": {
+   "count": 6,
+   "sha256": "5e8af75310e030f99ebc79640cd192d21235e67ea256502e3d62077a06bdcfb4"
+  },
+  "Robotiq2F140/grasp_box_top/(0.072, 0.088, 0.028)/clearance=0.002": {
+   "count": 6,
+   "sha256": "4ae0ddd53277e45955d158cf81ce47f19732a76d4766159d12baaead6c19fa5e"
+  },
+  "Robotiq2F140/grasp_box_top/(0.072, 0.088, 0.028)/clearance=0.006": {
+   "count": 3,
+   "sha256": "2f21f5a3e29784bbc72b0a4d6f73569bd0ac73adbb96d9785e2ddac322f0d083"
+  },
+  "Robotiq2F140/grasp_box_top/(0.115, 0.115, 0.115)/clearance=0.002": {
+   "count": 6,
+   "sha256": "a569b3d5cf87f1da35a858b51ef648ddb8e1dc2fd933333197c56cb2897e36c4"
+  },
+  "Robotiq2F140/grasp_box_top/(0.115, 0.115, 0.115)/clearance=0.006": {
+   "count": 6,
+   "sha256": "a2298a180e57e746f22acd37135718e199ca0ad8e2d5464b3efef92956bf2f97"
+  },
+  "Robotiq2F140/grasp_box_top/(0.115, 0.115, 0.115)/default": {
+   "count": 6,
+   "sha256": "e08f2bc777284b7e533607b9ea4462f0477ec5d7f2285a71c89ace7c43c836ae"
+  },
+  "Robotiq2F140/grasp_box_top/(0.12, 0.03, 0.2)/default": {
+   "count": 3,
+   "sha256": "fb47ef940e42cdc2db76f2997a2f7ec9418fc35ccea754a5fb551eca3e175649"
+  },
+  "Robotiq2F85/grasp_box_bottom/(0.03, 0.05, 0.015)/clearance=0.002": {
+   "count": 3,
+   "sha256": "41fa50c3db8efeb8173dcaef12298c953d917fe5134f6ff87d0863d7864d8395"
+  },
+  "Robotiq2F85/grasp_box_bottom/(0.03, 0.05, 0.015)/clearance=0.006": {
+   "count": 0,
+   "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  },
+  "Robotiq2F85/grasp_box_bottom/(0.04, 0.05, 0.06)/default": {
+   "count": 6,
+   "sha256": "cb6f16b6608a4cdf49f428f9bcf9b67a2334b5d38094894c5a6d487ab6b619ef"
+  },
+  "Robotiq2F85/grasp_box_bottom/(0.05, 0.06, 0.12)/default": {
+   "count": 6,
+   "sha256": "3224fba57ea9411689d6741096adbe0039d8e2c3492dd13070d2245144495439"
+  },
+  "Robotiq2F85/grasp_box_bottom/(0.06, 0.04, 0.1)/clearance=0.002": {
+   "count": 6,
+   "sha256": "1ff4727f68e3168235bb1857eb0006eb6d372d06b3e4c9ac899739ee52daa88f"
+  },
+  "Robotiq2F85/grasp_box_bottom/(0.06, 0.04, 0.1)/clearance=0.006": {
+   "count": 6,
+   "sha256": "be3b402e1037b97be0fbdc45ab34db558a0deb511e17fc27d785007d6a82e46b"
+  },
+  "Robotiq2F85/grasp_box_bottom/(0.07, 0.07, 0.07)/default": {
+   "count": 6,
+   "sha256": "6a52ec356c5994a2107ca51f73f038b0ed62a1d6c29a5e5e41888de6e5a71327"
+  },
+  "Robotiq2F85/grasp_box_bottom/(0.072, 0.088, 0.028)/clearance=0.002": {
+   "count": 3,
+   "sha256": "da059f58c2e5b827ef5e67b6b36bdf8898def000a45c3b84077ef8917b7b8c20"
+  },
+  "Robotiq2F85/grasp_box_bottom/(0.072, 0.088, 0.028)/clearance=0.006": {
+   "count": 3,
+   "sha256": "1f3953baecbb184aff009b633145f9d37dc75a7cfe311b2431066a093581cd44"
+  },
+  "Robotiq2F85/grasp_box_bottom/(0.115, 0.115, 0.115)/clearance=0.002": {
+   "count": 0,
+   "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  },
+  "Robotiq2F85/grasp_box_bottom/(0.115, 0.115, 0.115)/clearance=0.006": {
+   "count": 0,
+   "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  },
+  "Robotiq2F85/grasp_box_bottom/(0.115, 0.115, 0.115)/default": {
+   "count": 0,
+   "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  },
+  "Robotiq2F85/grasp_box_bottom/(0.12, 0.03, 0.2)/default": {
+   "count": 3,
+   "sha256": "4cdaa5222886dfa9b7e9b6f02b421df84449e561393f93b90a810dcd2488d1f0"
+  },
+  "Robotiq2F85/grasp_box_face_x/(0.03, 0.05, 0.015)/clearance=0.002": {
+   "count": 12,
+   "sha256": "0594303c23fc8d9087466e8de635553cecaac77d44168d3ff236e268e2a190a0"
+  },
+  "Robotiq2F85/grasp_box_face_x/(0.03, 0.05, 0.015)/clearance=0.006": {
+   "count": 12,
+   "sha256": "9d7682212a8edf889032a7c63008e86971918966470b9310ccd5c3b53156b08f"
+  },
+  "Robotiq2F85/grasp_box_face_x/(0.06, 0.04, 0.1)/clearance=0.002": {
+   "count": 6,
+   "sha256": "d557b7c920eb2b144a88487aef9667f2cd9c233bcc3ac360aefd3fd85bf4659c"
+  },
+  "Robotiq2F85/grasp_box_face_x/(0.06, 0.04, 0.1)/clearance=0.006": {
+   "count": 6,
+   "sha256": "5c718d201d2a71997385f697e114dddc6516e22c2b50a883629bbe35e3e23acc"
+  },
+  "Robotiq2F85/grasp_box_face_x/(0.07, 0.07, 0.07)/default": {
+   "count": 12,
+   "sha256": "2d96f6f4cce4e44029944127a49f590401cfe55de7dd55601ab04452d117fb9c"
+  },
+  "Robotiq2F85/grasp_box_face_x/(0.072, 0.088, 0.028)/clearance=0.002": {
+   "count": 6,
+   "sha256": "5cd755b7dc8ec8a376957e522c55f52a92f7198175b96168c1220a47bf6b1706"
+  },
+  "Robotiq2F85/grasp_box_face_x/(0.072, 0.088, 0.028)/clearance=0.006": {
+   "count": 6,
+   "sha256": "6d77513ebaf40cec86e4a4e6df08819debadfe552be3de1c79078c3f46a07ee4"
+  },
+  "Robotiq2F85/grasp_box_face_x/(0.115, 0.115, 0.115)/clearance=0.002": {
+   "count": 0,
+   "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  },
+  "Robotiq2F85/grasp_box_face_x/(0.115, 0.115, 0.115)/clearance=0.006": {
+   "count": 0,
+   "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  },
+  "Robotiq2F85/grasp_box_face_x/(0.115, 0.115, 0.115)/default": {
+   "count": 0,
+   "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  },
+  "Robotiq2F85/grasp_box_face_x/(0.12, 0.03, 0.2)/default": {
+   "count": 6,
+   "sha256": "a3f570c3784544d4a78a9f1c49ac8f5d2dd9f79f761bfca0a63b2122054b60da"
+  },
+  "Robotiq2F85/grasp_box_face_y/(0.03, 0.05, 0.015)/clearance=0.002": {
+   "count": 12,
+   "sha256": "6e76e809cdbcd1f2d58a8fd9daf0f8050b2a1f012b594ee6595ac1a983e9dc4a"
+  },
+  "Robotiq2F85/grasp_box_face_y/(0.03, 0.05, 0.015)/clearance=0.006": {
+   "count": 12,
+   "sha256": "e1ba7bbd9c7b2f2ab7c0f72ecc16cdcc2ad293e663159b0e4c7d389e532aa233"
+  },
+  "Robotiq2F85/grasp_box_face_y/(0.05, 0.06, 0.12)/default": {
+   "count": 6,
+   "sha256": "36a70e7e2b96c941ef7fcc26d13e6ed64eaa7398665552eda9bda37e0b17aae4"
+  },
+  "Robotiq2F85/grasp_box_face_y/(0.06, 0.04, 0.1)/clearance=0.002": {
+   "count": 6,
+   "sha256": "237875e64cc914ec9ea83f6875d1f55eb30d204add0d728b9ea89a54782c4a6b"
+  },
+  "Robotiq2F85/grasp_box_face_y/(0.06, 0.04, 0.1)/clearance=0.006": {
+   "count": 6,
+   "sha256": "ceeaf7ee8ac9c352900c9cd45f927d569c61520f5cb1d0ab50b2f58e19491d91"
+  },
+  "Robotiq2F85/grasp_box_face_y/(0.07, 0.07, 0.07)/default": {
+   "count": 12,
+   "sha256": "a328b483b06c8d542a4b238abfff6ecff6b186f535420b2312a0ce9ddc23c1b5"
+  },
+  "Robotiq2F85/grasp_box_face_y/(0.072, 0.088, 0.028)/clearance=0.002": {
+   "count": 12,
+   "sha256": "e90fdf2d334e57aa2d8ccc01fb0435ac0e6f7d71109daece784652529753b603"
+  },
+  "Robotiq2F85/grasp_box_face_y/(0.072, 0.088, 0.028)/clearance=0.006": {
+   "count": 12,
+   "sha256": "46670f29bee09aa20083a8875351c8890bcfd06c8eb52b4030f6688b36e0f851"
+  },
+  "Robotiq2F85/grasp_box_face_y/(0.115, 0.115, 0.115)/clearance=0.002": {
+   "count": 0,
+   "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  },
+  "Robotiq2F85/grasp_box_face_y/(0.115, 0.115, 0.115)/clearance=0.006": {
+   "count": 0,
+   "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  },
+  "Robotiq2F85/grasp_box_face_y/(0.115, 0.115, 0.115)/default": {
+   "count": 0,
+   "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  },
+  "Robotiq2F85/grasp_box_top/(0.03, 0.05, 0.015)/clearance=0.002": {
+   "count": 3,
+   "sha256": "f35f5b8d5685eb4425f689692cf436bcf0a4aec80cdea28483ac017ecb24da0a"
+  },
+  "Robotiq2F85/grasp_box_top/(0.03, 0.05, 0.015)/clearance=0.006": {
+   "count": 0,
+   "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  },
+  "Robotiq2F85/grasp_box_top/(0.04, 0.05, 0.06)/default": {
+   "count": 6,
+   "sha256": "5ea789320382712f659ec34642f3f183055aa8404403ad5994b4124f5833a3c0"
+  },
+  "Robotiq2F85/grasp_box_top/(0.05, 0.06, 0.12)/default": {
+   "count": 6,
+   "sha256": "b9bddd92b6134e40f4f4339a4a6b694f87b2e11893218307d2e1dafcdb85120a"
+  },
+  "Robotiq2F85/grasp_box_top/(0.06, 0.04, 0.1)/clearance=0.002": {
+   "count": 6,
+   "sha256": "a0d8adf89cf7577db431266ce139cd1255f50b4d0768b2385650508e7b5400dc"
+  },
+  "Robotiq2F85/grasp_box_top/(0.06, 0.04, 0.1)/clearance=0.006": {
+   "count": 6,
+   "sha256": "118cd40a1ef1f451921e3797d89d39234c25c8cf3b9399b9a40b053b4dbe0287"
+  },
+  "Robotiq2F85/grasp_box_top/(0.07, 0.07, 0.07)/default": {
+   "count": 6,
+   "sha256": "e076ca282b3e34cd681e0e4063281cbf86bc55c7fd6538c6e3b388445fa1269a"
+  },
+  "Robotiq2F85/grasp_box_top/(0.072, 0.088, 0.028)/clearance=0.002": {
+   "count": 3,
+   "sha256": "50e8752e597e98121ab4d49b4b5fc1a59ab98ac779176c7e0f329382dcd3217b"
+  },
+  "Robotiq2F85/grasp_box_top/(0.072, 0.088, 0.028)/clearance=0.006": {
+   "count": 3,
+   "sha256": "fb9c678a30f94657a04515aa701e92f00e85f5b56b626823d58b06861b8f0b0f"
+  },
+  "Robotiq2F85/grasp_box_top/(0.115, 0.115, 0.115)/clearance=0.002": {
+   "count": 0,
+   "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  },
+  "Robotiq2F85/grasp_box_top/(0.115, 0.115, 0.115)/clearance=0.006": {
+   "count": 0,
+   "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  },
+  "Robotiq2F85/grasp_box_top/(0.115, 0.115, 0.115)/default": {
+   "count": 0,
+   "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  },
+  "Robotiq2F85/grasp_box_top/(0.12, 0.03, 0.2)/default": {
+   "count": 3,
+   "sha256": "741e9e3381c55d7757b1fe443d676be755df0afd1e8dec4c8d43a7cb4dace9f8"
+  }
+ },
+ "recorded_with": "sstsr 4.0.0"
+}
