@@ -41,7 +41,9 @@ Clause codes on :class:`GraspWitness`:
 * ``4`` the clearance-aware usable band (finger depth, cylinder ends, box edges);
 * ``5`` reach: two opposing contacts exist within finger reach;
 * ``6`` contact normals oppose the closing directions;
-* ``8`` the declared ``mode``/``approach``/``finger_orientation`` match the pose.
+* ``8`` the declared ``mode``/``approach``/``finger_orientation``/``grip`` match the pose;
+* ``9`` the contacts lie where the declared grip holds: on the pads, a clearance inside
+  both ends, or behind them for an encompassing grasp of a wide enough object (#189).
 """
 
 from __future__ import annotations
@@ -653,6 +655,9 @@ def certify(
     mode: str,
     approach: Optional[str] = None,
     finger_orientation: Optional[str] = None,
+    pad_length: Optional[float] = None,
+    min_encompassing_diameter: Optional[float] = None,
+    grip: Optional[str] = None,
 ) -> GraspWitness:
     """Certify the soundness clauses for ``prim`` at end-effector ``pose``.
 
@@ -664,6 +669,11 @@ def certify(
     ``mode`` selects the analytic model; ``approach``/``finger_orientation`` are
     optional structural labels checked against the realized geometry. None of these
     supply numeric evidence -- contacts are derived from the pose.
+
+    ``pad_length`` and ``min_encompassing_diameter`` describe the hand's gripping
+    surfaces (#189); ``grip`` is the declared grip, a selector like ``mode``. A hand
+    without pads must declare no grip; a hand with pads must declare ``"pad"`` or
+    ``"encompassing"``, and clause 9 checks where on the finger the contacts fall.
     """
     _validate_model(prim, finger_length, max_aperture, preshape, clearance, mode, approach, finger_orientation)
     pose_f, reason = _validate_pose(pose)
@@ -759,6 +769,21 @@ def certify(
     # Optional declared-selector consistency (#94, #98): recognized labels are
     # checked against the realized pose geometry (clause 8); never trusted as input.
     failed.extend(_selector_failures(name, mode, a, y, p, approach, finger_orientation))
+    if np.isfinite(span):
+        failed.extend(
+            _grip_failures(
+                name,
+                mode,
+                finger_length - contact_distance,
+                cg.realized_depth,
+                span,
+                pad_length,
+                min_encompassing_diameter,
+                clearance,
+                grip,
+                atol,
+            )
+        )
 
     return GraspWitness(
         ok=not failed,
@@ -827,6 +852,44 @@ def _selector_failures(name, mode, a, y, p, approach, finger_orientation) -> Lis
     if finger_orientation is not None and not _orientation_consistent(name, y, finger_orientation):
         out.append((8, f"declared finger_orientation {finger_orientation!r} is inconsistent with the pose"))
     return out
+
+
+# Grasps whose contacts lie on one closing line crossing the object (the axis plane, the
+# sphere's centre, the tube centre, the torus equator), against grasps whose fingers
+# grip a face from the fingertip back to the insertion depth (caps and box faces).
+_LINE_CONTACT = {("sphere", "surface"), ("cylinder", "side"), ("torus", "side"), ("torus", "span")}
+_ENCOMPASSABLE = {("sphere", "surface"), ("cylinder", "side")}
+
+
+def _grip_failures(
+    name, mode, behind_tip, realized_depth, span, pad_length, min_diameter, c, grip, atol
+) -> List[Tuple[int, str]]:
+    """Clause 8/9 failures for where on the finger the contacts fall (#189).
+
+    ``behind_tip`` is the closing line's distance behind the fingertip, from the pose.
+    """
+    if pad_length is None:
+        return [(8, f"declared grip {grip!r} but the hand has no gripping surfaces")] if grip else []
+    if grip not in ("pad", "encompassing"):
+        return [(8, f"a hand with pads must declare grip 'pad' or 'encompassing', got {grip!r}")]
+    line = (name, mode) in _LINE_CONTACT
+    if grip == "encompassing":
+        if (name, mode) not in _ENCOMPASSABLE or min_diameter is None:
+            return [(8, f"({name}, {mode}) cannot be encompassed by this hand")]
+        out = []
+        if behind_tip < pad_length + c - atol:
+            out.append((9, f"encompassing contacts {behind_tip:.6g} behind the tip are not {c:.6g} behind the pads"))
+        if span < min_diameter - atol:
+            out.append((9, f"object {span:.6g} across is below the minimum encompassing {min_diameter:.6g}"))
+        return out
+    # Pad grip: a line contact sits a clearance inside both pad ends; a face contact runs
+    # from the fingertip back to the insertion depth, which must stay a clearance on the pads.
+    if line and behind_tip < c - atol:
+        return [(9, f"contacts {behind_tip:.6g} behind the tip are within {c:.6g} of the pad's tip end")]
+    inner = behind_tip if line else realized_depth
+    if inner > pad_length - c + atol:
+        return [(9, f"contacts reach {inner:.6g} behind the tip, past the pads ({pad_length:.6g}) less {c:.6g}")]
+    return []
 
 
 def pose_from(palm, approach, close) -> np.ndarray:

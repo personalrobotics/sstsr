@@ -192,6 +192,23 @@ preshape `a`, clearance `c`, and **every** pose admitted by a returned template:
    finger orientation, insertion depth (index/value), and symmetry **structurally**,
    via `TSRTemplate.provenance` (`GraspProvenance`). Tests and oracles read that
    record; they never infer semantics by parsing `name`.
+9. **Gripping surfaces** (#189). For a hand with pads of length `P` (from the
+   fingertip back), the contacts lie where the declared `grip` holds:
+   - `grip="pad"`: a grasp whose contacts lie on one closing line (cylinder side,
+     sphere, torus side and span) has that line at least `c` behind the fingertip and
+     at most `P − c`; a face grasp (cylinder caps, box faces), gripped from the
+     fingertip back to the insertion depth `d`, has `d ≤ P − c`.
+   - `grip="encompassing"`: only a cylinder side or a sphere at least the hand's
+     `min_encompassing_diameter` wide, with the closing line at least `P + c` behind
+     the fingertip — inward of the pads, where the fingers fold around the object.
+
+   A hand without pads declares no grip, and clause 9 is vacuous: it emits exactly
+   the templates it did before #189. Encompassing here is the closing-line model's:
+   the widest chord behind the pads. On the Robotiq 2F-85 and 2F-140 that is all but
+   empty, because `L − P` is about half the minimum encompassing diameter (21.5 mm
+   against 21.5, 49 against 45), so a wide enough object meets the palm first; a real
+   encompassing grip presses the object against the linkage, which this model does
+   not represent (#204).
 
 This describes a viable *pre-grasp*. It is **not** a claim of dynamic stability
 or force closure under arbitrary friction — an explicit non-goal.
@@ -261,14 +278,15 @@ grasp DSL:
    | `depth` | approach axis | insertion depth from the approached surface [m], `≥ 0` |
    | `approach` | object | side/family the **hand occupies** (not the sign of `z_EE`) |
    | `finger_orientation` | object | direction the pads are separated along — object axis (box) or yaw-free family `tangential`/`diameter` (fingers always close along `±y_EE`) |
-   | `depth_index`/`depth_count` | — | index (shallow → deep) and number of **distinct** depth levels in the template's *depth family* (`≤ k`; a one-point band gives `depth_count = 1`, an empty band emits nothing) (#81). A depth family is the templates **within one factory result** whose non-depth fields — `primitive`, `mode`, `approach`, `finger_orientation`, `symmetry`, `metadata` — are identical; it holds one template per depth level. The counters do not identify templates across independently generated or concatenated collections. |
+   | `depth_index`/`depth_count` | — | index (shallow → deep) and number of **distinct** depth levels in the template's *depth family* (`≤ k`; a one-point band gives `depth_count = 1`, an empty band emits nothing) (#81). A depth family is the templates **within one factory result** whose non-depth fields — `primitive`, `mode`, `approach`, `finger_orientation`, `symmetry`, `grip`, `metadata` — are identical; it holds one template per depth level. The counters do not identify templates across independently generated or concatenated collections. |
    | `symmetry` | — | distinguishes otherwise-equivalent templates (e.g. a roll flip) |
+   | `grip` | — | how a hand with gripping surfaces holds the object: `pad` or `encompassing` (clause 9); empty for an ideal jaw, and omitted from the serialized record then (#189) |
    | `metadata` | object | descriptive extras only — **never** geometric evidence (torus `minor_*`, box `slide_axis`/`span`) |
 
 2. **Native conformance** (`tsr.hands._conformance.validate_builtin_provenance`)
    owns the sstsr vocabulary and cross-field relational checks the value object
    does not: the built-in `(primitive, mode)` set, allowed `approach`/
-   `finger_orientation`/`symmetry` labels, required `metadata`, and relations
+   `finger_orientation`/`symmetry`/`grip` labels, required `metadata`, and relations
    (box `finger_orientation ≠ slide_axis`; box-face orientation lies in the face
    plane; torus `minor_index` in range). Built-in factory tests run it over every
    emitted template; it may evolve without closing the public type.
@@ -524,6 +542,9 @@ comparison the generator makes:
 | torus span reach | torus span | `c = L − r` |
 | aperture limit | box top | `c = A − span` |
 | straddle floor (#107, #129) | explicit preshape | margin `= 4·atol(scale)` |
+| pad band, line contact (#189) | sphere, cylinder side, torus side | `c = P/2` |
+| pad band, face contact (#189) | cylinder caps, box faces | `c = P/2` (`P < min(L, extent)`) |
+| encompassing band (#189) | sphere, cylinder side | `c = (L − r − P)/2` |
 
 The straddle floor is pinned on the **explicit-preshape** path, where the realized
 margin `preshape − span` is ulp-exact, and its boundary value is certified like any

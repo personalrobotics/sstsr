@@ -73,6 +73,11 @@ _NATIVE = {
     ("torus", "span"): dict(approaches={"+z", "-z"}, orientations={"diameter"}, symmetries={""}, metadata={}),
 }
 
+# How a hand with distinct gripping surfaces holds the object (#189). Any built-in grasp
+# can be held on the pads; only a curved object deep in the hand can be encompassed.
+_GRIPS = {"", "pad"}
+_ENCOMPASSABLE = {("cylinder", "side"), ("sphere", "surface")}
+
 
 def validate_builtin_provenance(p: GraspProvenance) -> None:
     """Raise ``ValueError`` if ``p`` is not a self-consistent built-in record.
@@ -94,6 +99,10 @@ def validate_builtin_provenance(p: GraspProvenance) -> None:
         value = getattr(p, label)
         if value not in allowed:
             raise ValueError(f"{label}={value!r} is not valid for built-in {key}; allowed {sorted(allowed)}")
+
+    allowed_grips = _GRIPS | ({"encompassing"} if key in _ENCOMPASSABLE else set())
+    if p.grip not in allowed_grips:
+        raise ValueError(f"grip={p.grip!r} is not valid for built-in {key}; allowed {sorted(allowed_grips)}")
 
     for name, predicate in spec["metadata"].items():
         if name not in p.metadata:

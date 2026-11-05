@@ -270,6 +270,9 @@ class TestInclusiveBoundaryMutant(unittest.TestCase):
         "radial_far_surface",
         "box_approach_band",
         "torus_span_reach",
+        "pad_band_half",
+        "pad_face_band_half",
+        "encompassing_band",
     )
 
     def test_strict_depth_band_is_detected(self):

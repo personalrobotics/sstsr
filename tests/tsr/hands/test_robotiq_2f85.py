@@ -31,7 +31,9 @@ class TestRobotiq2F85(unittest.TestCase):
     def test_outputs_canonical_frames(self):
         # Robotiq2F85 should produce identical Tw_e as a plain
         # ParallelJawGripper with the same hardware parameters.
-        base = ParallelJawGripper(finger_length=0.059, max_aperture=0.085)
+        base = ParallelJawGripper(
+            finger_length=0.059, max_aperture=0.085, pad_length=0.0375, min_encompassing_diameter=0.043
+        )
         # Use a can-sized cylinder (33 mm radius, 115 mm height)
         t_base = base.grasp_cylinder_side(0.033, 0.115)
         t_robotiq = self.gripper.grasp_cylinder_side(0.033, 0.115)
