@@ -32,7 +32,27 @@ from pathlib import Path
 from tsr.hands import FrankaHand, Robotiq2F85, Robotiq2F140
 
 BASELINE = Path(__file__).resolve().parents[2] / "reference" / "box_margin_baseline.json"
-HANDS = {"Robotiq2F140": Robotiq2F140, "Robotiq2F85": Robotiq2F85, "FrankaHand": FrankaHand}
+
+
+def _without_pads(make):
+    """The hand as it was when the baseline was recorded, before it had pads (#189).
+
+    The pads narrow the Robotiq hands' bands on purpose; this promise is about the margin.
+    """
+
+    def build():
+        hand = make()
+        hand.pad_length = hand.min_encompassing_diameter = None
+        return hand
+
+    return build
+
+
+HANDS = {
+    "Robotiq2F140": _without_pads(Robotiq2F140),
+    "Robotiq2F85": _without_pads(Robotiq2F85),
+    "FrankaHand": FrankaHand,
+}
 FAMILIES = ("grasp_box_top", "grasp_box_bottom", "grasp_box_face_x", "grasp_box_face_y")
 # Which box dimension each family approaches along.
 APPROACH_AXIS = {"grasp_box_top": 2, "grasp_box_bottom": 2, "grasp_box_face_x": 0, "grasp_box_face_y": 1}

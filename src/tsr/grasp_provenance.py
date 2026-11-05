@@ -30,9 +30,12 @@ pads are separated along (fingers always close along ``±y_EE``, a library
 invariant); ``depth_count`` is the number of **distinct** depth levels emitted for
 a *depth family* (at most the requested ``k``; fewer when the feasible band
 collapses), and ``depth_index`` in ``0..depth_count-1`` orders them shallow to deep.
+``grip`` is how a hand with distinct gripping surfaces holds the object (#189):
+``"pad"`` with the contacts on the fingertip pads, ``"encompassing"`` with the object
+deep in the hand and the fingers folding around it; empty for an ideal parallel jaw.
 A depth family is the set of templates **within one factory result** whose non-depth
 provenance fields are identical: ``primitive``, ``mode``, ``approach``,
-``finger_orientation``, ``symmetry``, and ``metadata`` are held fixed while only
+``finger_orientation``, ``symmetry``, ``grip``, and ``metadata`` are held fixed while only
 ``depth``, ``depth_index``, and ``depth_count`` vary, so a family holds exactly one
 template per depth level. The counters are not a global identifier across
 independently generated or concatenated collections;
@@ -75,14 +78,16 @@ class GraspProvenance:
     depth_count: int
     symmetry: str = ""
     metadata: Mapping[str, JSONScalar] = field(default_factory=dict)
+    grip: str = ""
 
     def __post_init__(self) -> None:
         for name in ("primitive", "mode", "approach", "finger_orientation"):
             value = getattr(self, name)
             if not isinstance(value, str) or not value:
                 raise ValueError(f"{name} must be a non-empty string, got {value!r}")
-        if not isinstance(self.symmetry, str):
-            raise ValueError(f"symmetry must be a string, got {self.symmetry!r}")
+        for name in ("symmetry", "grip"):
+            if not isinstance(getattr(self, name), str):
+                raise ValueError(f"{name} must be a string, got {getattr(self, name)!r}")
 
         require_int(self.depth_index, "depth_index")
         require_int(self.depth_count, "depth_count")
@@ -107,6 +112,8 @@ class GraspProvenance:
         }
         if self.symmetry:
             d["symmetry"] = self.symmetry
+        if self.grip:
+            d["grip"] = self.grip
         if self.metadata:
             d["metadata"] = dict(self.metadata)
         return d
@@ -131,4 +138,5 @@ class GraspProvenance:
             depth_count=x["depth_count"],
             symmetry=x.get("symmetry", ""),
             metadata=dict(x.get("metadata", {})),
+            grip=x.get("grip", ""),
         )

@@ -6,6 +6,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+Objects are placed by their parts, and the Robotiq hands grip on their pads.
+`StablePlacer.place(shape)` takes an object as its boxes, cylinders, spheres, capsules and
+hulls, and picks how to place it (#201). The Robotiq 2F-85 and 2F-140 grip only on their
+fingertip pads, and their grasps now keep the contacts there (#189). The pads ride forward
+with the fingertips as the hand closes (#193), so a contact's place on them is measured
+from the closed fingertips.
+
 ### Added
 - **`StablePlacer.place(shape)`** (#201) places an object described by its parts, so a
   caller need not know which factory fits it. A `tsr.placement.Shape` holds `Box`, `Cylinder`,
@@ -17,6 +24,34 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   heights from their exact support and contact patches from their own points, so a sampled
   curve cannot invent a rest where the object rolls. Those rests record the primitive
   `"compound"`, enumerated like a mesh's faces, and come most stable first.
+- **Gripping surfaces on `ParallelJawGripper`**: `pad_length` (how far back from the
+  fingertip the pads grip) and `min_encompassing_diameter`, both keyword-only and `None`
+  by default (#189). With neither, a hand emits exactly the templates it did in 4.2.0 —
+  verified byte for byte against 4.2.0's generator on 5,000 seeded random cases.
+- `Robotiq2F140`: `PAD_LENGTH = 0.065`, `MIN_ENCOMPASSING_DIAMETER = 0.090`.
+  `Robotiq2F85`: `PAD_LENGTH = 0.0375`, `MIN_ENCOMPASSING_DIAMETER = 0.043`. Pad lengths
+  are measured from geodude_assets' `2f140.xml` and menagerie's `2f85.xml`; the diameters
+  are Robotiq's.
+- **`GraspProvenance.grip`**: `"pad"`, `"encompassing"`, or empty for an ideal jaw, which
+  is also omitted from the serialized record, so every record written before still reads.
+- Clause 9 of the geometric grasp contract, and the oracle and matrix boundaries for it.
+
+### Changed
+- **A hand with pads keeps every contact on them, a margin inside both ends, measured
+  from the closed fingertips.** A closing line across the object (cylinder side, sphere,
+  torus) sits between `c` and `P − c` behind them; a face grasp (caps, box faces) grips
+  at most `P − c` back from them. The pads only narrow a band: every template still keeps
+  the closed fingertips inside the far surface (#193). Most visibly, a 2F-85 box or cap
+  grasp deeper than its 37.5 mm pads allow is no longer offered, and on a wide object
+  whose closed reach gain is small the shallowest pose no longer pinches at the pad's tip.
+  The 66 mm can on the 2F-140 keeps 4.2.0's depths, its contacts 19–30 mm up the pads.
+- Template names and descriptions of the two Robotiq hands carry the grip ("shallow
+  pad", …).
+
+### Known limitation
+- **Neither Robotiq hand encompasses.** Encompassing is modelled as the widest chord
+  behind the pads, still bounded by the far surface, and on both hands no object within
+  the aperture has one. A linkage-aware model is #204.
 
 ## [4.2.0] — 2026-11
 

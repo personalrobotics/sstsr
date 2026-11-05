@@ -17,8 +17,9 @@ from .base import GripperBase
 _DEPTH_LABELS = {1: ["mid"], 2: ["shallow", "deep"], 3: ["shallow", "mid", "deep"]}
 
 
-def _depth_label(k: int, i: int) -> str:
-    return (_DEPTH_LABELS.get(k) or [f"depth {j + 1}/{k}" for j in range(k)])[i]
+def _depth_label(k: int, i: int, grip: str = "") -> str:
+    label = (_DEPTH_LABELS.get(k) or [f"depth {j + 1}/{k}" for j in range(k)])[i]
+    return f"{label} {grip}" if grip else label
 
 
 class ParallelJawGripper(GripperBase):
@@ -38,6 +39,17 @@ class ParallelJawGripper(GripperBase):
 
         R = np.array([[0, 0, -1], [0, 1, 0], [1, 0, 0]])
 
+    **Gripping surfaces (#189).** By default the whole inner face of each finger grips.
+    A hand whose fingers grip only on fingertip pads, like the Robotiq 2F-85 and 2F-140,
+    declares ``pad_length``: then every grasp keeps its contacts on the pads, a margin
+    inside both ends, and is labelled ``grip="pad"``. A hand that can also wrap an
+    object deep in the hand declares ``min_encompassing_diameter``: a cylinder side or
+    sphere grasp of an object at least that wide also gets ``grip="encompassing"``
+    depths, with the contacts behind the pads down to the palm's clearance. The pads ride
+    with the fingertips, so a contact's place on them is measured from the fingertips
+    closed on the object, ``reach(span)`` past the palm; and the pads only narrow a band,
+    which still keeps the closed fingertips inside the far surface (#193).
+
     **Closed reach** (#193). ``finger_length`` is the fingertips' reach with the hand open.
     A linkage hand's pads move on an arc, so closed on an object its fingertips can reach
     further: :meth:`reach` gives the reach closed to a width. Every template whose depth band
@@ -49,6 +61,10 @@ class ParallelJawGripper(GripperBase):
     Args:
         finger_length: Distance from palm to fingertip, hand open [m].
         max_aperture:  Maximum jaw opening [m].
+        pad_length:    How far back from the fingertip the pads grip [m], at most
+                       ``finger_length``; ``None`` (default) for an ideal jaw.
+        min_encompassing_diameter: Smallest object the hand can encompass [m];
+                       ``None`` (default) if it never does. Requires ``pad_length``.
     """
 
     #: Measured closed reach, ``((width, reach), ...)`` in metres with widths ascending, or
@@ -62,15 +78,79 @@ class ParallelJawGripper(GripperBase):
         finger_length: float,
         max_aperture: float,
         clearance_fraction: float = 0.1,
+        *,
+        pad_length: Optional[float] = None,
+        min_encompassing_diameter: Optional[float] = None,
     ):
         # Centralized gripper-parameter validation (#68): a malformed gripper is an
         # invalid request, so we raise rather than emit templates or NaNs later.
         self._check_positive_finite("finger_length", finger_length)
         self._check_positive_finite("max_aperture", max_aperture)
         self._check_nonnegative_finite("clearance_fraction", clearance_fraction)
+        if pad_length is not None:
+            self._check_positive_finite("pad_length", pad_length)
+            if pad_length > finger_length:
+                raise ValueError(f"pad_length ({pad_length}) must not exceed finger_length ({finger_length})")
+        if min_encompassing_diameter is not None:
+            self._check_positive_finite("min_encompassing_diameter", min_encompassing_diameter)
+            if pad_length is None:
+                raise ValueError("min_encompassing_diameter requires pad_length: encompassing grips behind the pads")
         self.finger_length = finger_length
         self.max_aperture = max_aperture
         self.clearance_fraction = clearance_fraction
+        self.pad_length = pad_length
+        self.min_encompassing_diameter = min_encompassing_diameter
+
+    @property
+    def _grip(self) -> str:
+        """The grip label of a pad-held grasp: ``"pad"``, or ``""`` for an ideal jaw."""
+        return "" if self.pad_length is None else "pad"
+
+    @property
+    def _pad_reach(self) -> float:
+        """How far back from the fingertip a face contact may extend: the pads, else no limit."""
+        return np.inf if self.pad_length is None else self.pad_length
+
+    def _line_contact_bands(
+        self,
+        radius: float,
+        hi: float,
+        margin: float,
+        gain: float,
+        k: int,
+        encompass_diameter: Optional[float] = None,
+    ) -> List[Tuple[str, np.ndarray]]:
+        """``(grip, depths)`` for a grasp whose contacts lie ``radius`` past the near surface.
+
+        ``hi`` is the band's deep limit (palm, and where it applies the far surface, #193).
+        An ideal jaw keeps the band ``[radius, hi]``. The closing line crosses the object
+        ``radius`` deep, so at insertion ``d`` the contacts sit ``d - radius`` behind the
+        open fingertips and ``d - radius + gain`` behind the closed ones, ``gain`` being
+        the closed-reach gain across the span. The pads ride with the fingertips, so a
+        hand with pads keeps the contacts on them, ``margin`` inside both ends, measured
+        from the closed fingertips: ``d ∈ [max(radius, radius + margin - gain),
+        min(radius + pad_length - margin - gain, hi)]``. An object of
+        ``encompass_diameter`` at least the hand's minimum is also encompassed, with the
+        contacts ``margin`` behind the pads: ``d ∈ [radius + pad_length + margin - gain,
+        hi]`` (#189). Empty bands are omitted.
+        """
+        if self.pad_length is None:
+            depths = self._usable_depths(radius, hi, k)
+            return [] if depths is None else [("", depths)]
+        bands = []
+        pad_lo = max(radius, radius + margin - gain)
+        pad = self._usable_depths(pad_lo, min(radius + self.pad_length - margin - gain, hi), k)
+        if pad is not None:
+            bands.append(("pad", pad))
+        if (
+            encompass_diameter is not None
+            and self.min_encompassing_diameter is not None
+            and encompass_diameter >= self.min_encompassing_diameter
+        ):
+            encompassing = self._usable_depths(radius + self.pad_length + margin - gain, hi, k)
+            if encompassing is not None:
+                bands.append(("encompassing", encompassing))
+        return bands
 
     def reach(self, width: float) -> float:
         """How far the fingertips reach past the palm along the approach, closed to ``width`` [m].
@@ -135,11 +215,11 @@ class ParallelJawGripper(GripperBase):
         """Classify an empty approach depth band ``[m, min(L, extent − g) − m]`` (#193).
 
         ``insufficient_clearance_band`` when the band is empty even for the open hand
-        (``min(L, extent) − m < m``); otherwise the open hand fits and the fingertips, closed
+        (``min(L, extent, pad_length) − m < m``); otherwise the open hand fits and the fingertips, closed
         on the span and ``g = reach(span) − L`` further on, would pass the far face:
         ``closed_reach_too_long``. Diagnostics only.
         """
-        if min(self.finger_length, extent) - margin < margin:
+        if min(self.finger_length, extent, self._pad_reach) - margin < margin:
             return "insufficient_clearance_band"
         return "closed_reach_too_long"
 
@@ -263,12 +343,19 @@ class ParallelJawGripper(GripperBase):
         # palm inside the surface, #69), because an excessive clearance relative to the
         # radius empties the far-surface limit (#108), or because the closed fingertips
         # would pass it; _radial_band_reason names the failed constraint.
-        depth_min = cylinder_radius
-        depth_max = (
-            min(self.finger_length, 2 * cylinder_radius - self._closed_reach_gain(2 * cylinder_radius)) - clearance
+        #
+        # A hand with pads also keeps the contacts on them, measured from the closed
+        # fingertips (#189).
+        gain = self._closed_reach_gain(2 * cylinder_radius)
+        bands = self._line_contact_bands(
+            cylinder_radius,
+            hi=min(self.finger_length, 2 * cylinder_radius - gain) - clearance,
+            margin=margin,
+            gain=gain,
+            k=k,
+            encompass_diameter=2.0 * cylinder_radius,
         )
-        depths = self._usable_depths(depth_min, depth_max, k)
-        if depths is None:
+        if not bands:
             return self._empty(
                 "grasp_cylinder_side",
                 self._radial_band_reason(cylinder_radius, clearance),
@@ -286,9 +373,17 @@ class ParallelJawGripper(GripperBase):
             preshape=np.array([preshape]),
         )
         templates = []
+        for grip, depths in bands:
+            templates += self._cylinder_side_templates(
+                cylinder_radius, depths, grip, preshape, name, description, reference, common
+            )
+        return templates
+
+    def _cylinder_side_templates(self, cylinder_radius, depths, grip, preshape, name, description, reference, common):
+        templates = []
         for i, d in enumerate(depths):
             ro = cylinder_radius + self.finger_length - d
-            dlabel = _depth_label(len(depths), i)
+            dlabel = _depth_label(len(depths), i, grip)
             Tw_e_0 = np.array(
                 [
                     [0.0, 0.0, -1.0, ro],
@@ -328,6 +423,7 @@ class ParallelJawGripper(GripperBase):
                             depth_count=len(depths),
                             depth=float(d),
                             symmetry=roll_variant,
+                            grip=grip,
                         ),
                         **common,
                     )
@@ -418,7 +514,9 @@ class ParallelJawGripper(GripperBase):
         # so would the closed fingertips, which reach further across the diameter (#193).
         # Both limits face a cap, so they use the edge margin (#121).
         margin = self._edge_margin(clearance, max(cylinder_radius, cylinder_height))
-        far_cap = cylinder_height - self._closed_reach_gain(2.0 * cylinder_radius)
+        # A hand with pads grips the cap from the closed fingertips back, so the pads bound
+        # the band as the far cap does (#189).
+        far_cap = min(cylinder_height, self._pad_reach) - self._closed_reach_gain(2.0 * cylinder_radius)
         depths = self._usable_depths(margin, min(self.finger_length, far_cap) - margin, k)
         if depths is None:
             return self._empty(
@@ -439,7 +537,7 @@ class ParallelJawGripper(GripperBase):
         templates = []
         for i, d in enumerate(depths):
             h_palm = self.finger_length - d
-            dlabel = _depth_label(len(depths), i)
+            dlabel = _depth_label(len(depths), i, self._grip)
             t_desc = description or (
                 f"{dlabel.capitalize()} top grasp on {reference}: "
                 f"palm {h_palm * 1000:.0f}mm above rim, preshape {preshape * 1000:.0f}mm"
@@ -466,6 +564,7 @@ class ParallelJawGripper(GripperBase):
                         depth_index=i,
                         depth_count=len(depths),
                         depth=float(d),
+                        grip=self._grip,
                     ),
                     **common,
                 )
@@ -552,7 +651,9 @@ class ParallelJawGripper(GripperBase):
         # Bounded by the height as well as the fingers (#122), open and closed (#193):
         # see grasp_cylinder_top. Both limits face a cap, so they use the edge margin (#121).
         margin = self._edge_margin(clearance, max(cylinder_radius, cylinder_height))
-        far_cap = cylinder_height - self._closed_reach_gain(2.0 * cylinder_radius)
+        # A hand with pads grips the cap from the closed fingertips back, so the pads bound
+        # the band as the far cap does (#189).
+        far_cap = min(cylinder_height, self._pad_reach) - self._closed_reach_gain(2.0 * cylinder_radius)
         depths = self._usable_depths(margin, min(self.finger_length, far_cap) - margin, k)
         if depths is None:
             return self._empty(
@@ -573,7 +674,7 @@ class ParallelJawGripper(GripperBase):
         templates = []
         for i, d in enumerate(depths):
             h_palm = self.finger_length - d
-            dlabel = _depth_label(len(depths), i)
+            dlabel = _depth_label(len(depths), i, self._grip)
             t_desc = description or (
                 f"{dlabel.capitalize()} bottom grasp on {reference}: "
                 f"palm {h_palm * 1000:.0f}mm below bottom, preshape {preshape * 1000:.0f}mm"
@@ -600,6 +701,7 @@ class ParallelJawGripper(GripperBase):
                         depth_index=i,
                         depth_count=len(depths),
                         depth=float(d),
+                        grip=self._grip,
                     ),
                     **common,
                 )
@@ -675,10 +777,11 @@ class ParallelJawGripper(GripperBase):
         # approached face) and the box's extent along the approach axis (the fingertip
         # clears the far face), each by the edge margin m = max(clearance, 2*atol)
         # (#70, #121). The far-face limit holds for the closed fingertips too, which reach
-        # further once closed across span_dim (#193). Empty band -> [] silently;
-        # the public box_* method logs once at its boundary.
+        # further once closed across span_dim (#193). A hand with pads grips the face from
+        # the closed fingertips back, so the pads bound it as the far face does (#189).
+        # Empty band -> [] silently; the public box_* method logs once at its boundary.
         margin = self._edge_margin(clearance, box_scale)  # both limits face a box face (#121)
-        far_face = approach_extent - self._closed_reach_gain(span_dim)
+        far_face = min(approach_extent, self._pad_reach) - self._closed_reach_gain(span_dim)
         depths = self._usable_depths(margin, min(self.finger_length, far_face) - margin, k)
         if depths is None:
             why.append(self._cap_band_reason(approach_extent, margin))
@@ -694,7 +797,7 @@ class ParallelJawGripper(GripperBase):
         templates = []
         for i, d in enumerate(depths):
             h_palm = self.finger_length - d
-            dlabel = _depth_label(len(depths), i)
+            dlabel = _depth_label(len(depths), i, self._grip)
             Tw_e = np.eye(4)
             Tw_e[:3, :3] = R
             Tw_e[:3, 3] = -z_ee * h_palm  # palm is h_palm outside the face
@@ -722,6 +825,7 @@ class ParallelJawGripper(GripperBase):
                             "margin": float(margin),
                             "margin_basis": margin_basis,
                         },
+                        grip=self._grip,
                     ),
                     **common,
                 )
@@ -777,7 +881,7 @@ class ParallelJawGripper(GripperBase):
         # generation judges it and the family's reason names it (#193).
         box_scale = max(box_x, box_y, box_z)
         margin = self._edge_margin(clearance, box_scale)
-        if self._usable_depths(margin, min(self.finger_length, box_z) - margin, k) is None:
+        if self._usable_depths(margin, min(self.finger_length, self._pad_reach, box_z) - margin, k) is None:
             return self._empty(
                 "grasp_box_top", "insufficient_clearance_band", clearance=clearance, margin=margin, box_z=box_z
             )
@@ -878,7 +982,7 @@ class ParallelJawGripper(GripperBase):
         # generation judges it and the family's reason names it (#193).
         box_scale = max(box_x, box_y, box_z)
         margin = self._edge_margin(clearance, box_scale)
-        if self._usable_depths(margin, min(self.finger_length, box_z) - margin, k) is None:
+        if self._usable_depths(margin, min(self.finger_length, self._pad_reach, box_z) - margin, k) is None:
             return self._empty(
                 "grasp_box_bottom", "insufficient_clearance_band", clearance=clearance, margin=margin, box_z=box_z
             )
@@ -980,7 +1084,7 @@ class ParallelJawGripper(GripperBase):
         # generation judges it and the family's reason names it (#193).
         box_scale = max(box_x, box_y, box_z)
         margin = self._edge_margin(clearance, box_scale)
-        if self._usable_depths(margin, min(self.finger_length, box_x) - margin, k) is None:
+        if self._usable_depths(margin, min(self.finger_length, self._pad_reach, box_x) - margin, k) is None:
             return self._empty(
                 "grasp_box_face_x", "insufficient_clearance_band", clearance=clearance, margin=margin, box_x=box_x
             )
@@ -1091,7 +1195,7 @@ class ParallelJawGripper(GripperBase):
         # generation judges it and the family's reason names it (#193).
         box_scale = max(box_x, box_y, box_z)
         margin = self._edge_margin(clearance, box_scale)
-        if self._usable_depths(margin, min(self.finger_length, box_y) - margin, k) is None:
+        if self._usable_depths(margin, min(self.finger_length, self._pad_reach, box_y) - margin, k) is None:
             return self._empty(
                 "grasp_box_face_y", "insufficient_clearance_band", clearance=clearance, margin=margin, box_y=box_y
             )
@@ -1243,11 +1347,18 @@ class ParallelJawGripper(GripperBase):
         # empty because the fingers are too short (finger_length < radius + clearance,
         # palm inside the sphere), because an excessive clearance relative to the
         # radius empties the far-surface limit, or because the fingertips closed across
-        # the diameter would pass it; _radial_band_reason names the cause.
-        depth_min = object_radius
-        depth_max = min(self.finger_length, 2 * object_radius - self._closed_reach_gain(2 * object_radius)) - clearance
-        depths = self._usable_depths(depth_min, depth_max, k)
-        if depths is None:
+        # the diameter would pass it; _radial_band_reason names the cause. A hand with
+        # pads also keeps the contacts on them, as for the cylinder side (#189).
+        gain = self._closed_reach_gain(2 * object_radius)
+        bands = self._line_contact_bands(
+            object_radius,
+            hi=min(self.finger_length, 2 * object_radius - gain) - clearance,
+            margin=self._edge_margin(clearance, object_radius),
+            gain=gain,
+            k=k,
+            encompass_diameter=2.0 * object_radius,
+        )
+        if not bands:
             return self._empty(
                 "grasp_sphere",
                 self._radial_band_reason(object_radius, clearance),
@@ -1269,42 +1380,51 @@ class ParallelJawGripper(GripperBase):
         else:
             coverage = f"azimuth lune {np.degrees(angle_range[0]):.0f}°–{np.degrees(angle_range[1]):.0f}°"
         templates = []
-        for i, d in enumerate(depths):
-            ro = object_radius + self.finger_length - d
-            dlabel = _depth_label(len(depths), i)
-            # Approach along -x in TSR frame; standoff ro baked into Tw_e.
-            # Bw roll/pitch/yaw rotates this to any direction on the sphere.
-            Tw_e = np.array(
-                [
-                    [0.0, 0.0, -1.0, ro],
-                    [0.0, 1.0, 0.0, 0.0],
-                    [1.0, 0.0, 0.0, 0.0],
-                    [0.0, 0.0, 0.0, 1.0],
-                ]
-            )
-            t_desc = description or (
-                f"{dlabel.capitalize()} sphere grasp on {reference}: "
-                f"standoff {ro * 1000:.0f}mm from center, {coverage}, "
-                f"preshape {preshape * 1000:.0f}mm"
-            )
-            templates.append(
-                TSRTemplate(
-                    Tw_e=Tw_e,
-                    name=f"{name} — {dlabel}",
-                    description=t_desc,
-                    provenance=GraspProvenance(
-                        primitive="sphere",
-                        mode="surface",
-                        approach="radial",
-                        finger_orientation="diameter",
-                        depth_index=i,
-                        depth_count=len(depths),
-                        depth=float(d),
-                    ),
-                    **common,
+        for grip, depths in bands:
+            for i, d in enumerate(depths):
+                templates.append(
+                    self._sphere_template(
+                        object_radius, d, i, len(depths), grip, preshape, coverage, common, name, description, reference
+                    )
                 )
-            )
         return templates
+
+    def _sphere_template(
+        self, object_radius, d, i, count, grip, preshape, coverage, common, name, description, reference
+    ):
+        ro = object_radius + self.finger_length - d
+        dlabel = _depth_label(count, i, grip)
+        # Approach along -x in TSR frame; standoff ro baked into Tw_e.
+        # Bw roll/pitch/yaw rotates this to any direction on the sphere.
+        Tw_e = np.array(
+            [
+                [0.0, 0.0, -1.0, ro],
+                [0.0, 1.0, 0.0, 0.0],
+                [1.0, 0.0, 0.0, 0.0],
+                [0.0, 0.0, 0.0, 1.0],
+            ]
+        )
+        t_desc = description or (
+            f"{dlabel.capitalize()} sphere grasp on {reference}: "
+            f"standoff {ro * 1000:.0f}mm from center, {coverage}, "
+            f"preshape {preshape * 1000:.0f}mm"
+        )
+        return TSRTemplate(
+            Tw_e=Tw_e,
+            name=f"{name} — {dlabel}",
+            description=t_desc,
+            provenance=GraspProvenance(
+                primitive="sphere",
+                mode="surface",
+                approach="radial",
+                finger_orientation="diameter",
+                depth_index=i,
+                depth_count=count,
+                depth=float(d),
+                grip=grip,
+            ),
+            **common,
+        )
 
     # ── Torus primitives ─────────────────────────────────────────────────────
 
@@ -1429,9 +1549,16 @@ class ParallelJawGripper(GripperBase):
         # clearance relative to the tube radius empties the far-surface limit, or because
         # the closed fingertips would pass it; _radial_band_reason names the failed
         # constraint (#114).
-        far_side = 2 * tube_radius - self._closed_reach_gain(2 * tube_radius)
-        depths = self._usable_depths(tube_radius, min(far_side, self.finger_length) - clearance, k)
-        if depths is None:
+        # A hand with pads also keeps the contacts on them (#189).
+        gain = self._closed_reach_gain(2 * tube_radius)
+        bands = self._line_contact_bands(
+            tube_radius,
+            hi=min(2 * tube_radius - gain, self.finger_length) - clearance,
+            margin=self._edge_margin(clearance, torus_radius + tube_radius),
+            gain=gain,
+            k=k,
+        )
+        if not bands:
             return self._empty(
                 "grasp_torus_side",
                 self._radial_band_reason(tube_radius, clearance),
@@ -1439,6 +1566,7 @@ class ParallelJawGripper(GripperBase):
                 tube_radius=tube_radius,
                 clearance=clearance,
             )
+        (grip, depths), *_ = bands  # a torus is never encompassed: at most the one band
         minor_angles = self._sample_range(minor_angle_range, n_minor)
 
         common = dict(
@@ -1459,7 +1587,7 @@ class ParallelJawGripper(GripperBase):
                 # Gripper position in TSR frame (before yaw rotation)
                 tx = torus_radius + ro_minor * ca
                 tz = ro_minor * sa
-                dlabel = _depth_label(len(depths), i)
+                dlabel = _depth_label(len(depths), i, grip)
                 # z_EE = (−cosα, 0, −sinα); y_EE in radial-vertical plane ⊥ z_EE
                 # y_EE ⊥ z_EE in span{x̂,ẑ}: y_EE = (−sinα, 0, cosα)
                 # x_EE = y_EE × z_EE = (0, −1, 0)  [same for all α]
@@ -1508,6 +1636,7 @@ class ParallelJawGripper(GripperBase):
                                     "minor_count": len(minor_angles),
                                     "minor_angle": float(alpha),
                                 },
+                                grip=grip,
                             ),
                             **common,
                         )
@@ -1560,9 +1689,16 @@ class ParallelJawGripper(GripperBase):
         # palm stands off a clearance above the tube top (d <= finger_length -
         # clearance). Empty when finger_length < tube_radius + clearance. The fingers
         # pass outside the torus rather than into it, so no far face bounds the depth and
-        # the closed reach does not enter (#193).
-        depths = self._usable_depths(tube_radius, self.finger_length - clearance, k)
-        if depths is None:
+        # the closed reach does not enter it (#193) -- except through the pads: a hand with
+        # pads keeps the equator contacts on them, measured from the closed fingertips (#189).
+        bands = self._line_contact_bands(
+            tube_radius,
+            hi=self.finger_length - clearance,
+            margin=self._edge_margin(clearance, torus_radius + tube_radius),
+            gain=self._closed_reach_gain(outer_diameter),
+            k=k,
+        )
+        if not bands:
             return self._empty(
                 "grasp_torus_span",
                 "finger_too_short",
@@ -1570,10 +1706,11 @@ class ParallelJawGripper(GripperBase):
                 tube_radius=tube_radius,
                 clearance=clearance,
             )
+        (grip, depths), *_ = bands
         templates = []
         for i, d in enumerate(depths):
             h_palm = self.finger_length - d
-            dlabel = _depth_label(len(depths), i)
+            dlabel = _depth_label(len(depths), i, grip)
 
             # Top: z_EE = [0,0,-1]; TSR origin at tube top (z = +tube_r)
             T_top = np.eye(4)
@@ -1609,6 +1746,7 @@ class ParallelJawGripper(GripperBase):
                         depth_index=i,
                         depth_count=len(depths),
                         depth=float(d),
+                        grip=grip,
                     ),
                 )
             )
@@ -1647,6 +1785,7 @@ class ParallelJawGripper(GripperBase):
                         depth_index=i,
                         depth_count=len(depths),
                         depth=float(d),
+                        grip=grip,
                     ),
                 )
             )
@@ -1683,6 +1822,14 @@ class Robotiq2F140(ParallelJawGripper):
     within 0.1 mm of every measured level. The curve is the model's and has not been checked
     against Robotiq's finger drawings.
 
+    ``PAD_LENGTH = 0.065 m``: the pads (``pad_box1``, half-length 32.5 mm) run from
+    49 to 114 mm past the palm at full open, measured in the ``grasp_site`` frame of
+    geodude_assets ``2f140.xml``; inward of them is the four-bar linkage (#189). They
+    ride on the followers, so as the hand closes they move forward with the fingertips.
+    ``MIN_ENCOMPASSING_DIAMETER = 0.090 m`` is Robotiq's minimum encompassing object
+    diameter (2F-85/2F-140 instruction manual, section 6, Specifications). Below it the
+    2F-140 grips in parallel, on the pads; a can of 66 mm is a pad grasp.
+
     Outputs poses in the canonical TSR EE frame (z=approach, y=finger-opening,
     x=palm normal). The corresponding MuJoCo model (geodude_assets 2f140.xml)
     defines a ``grasp_site`` at the palm with this orientation baked in — use
@@ -1692,6 +1839,8 @@ class Robotiq2F140(ParallelJawGripper):
 
     FINGER_LENGTH = 0.114
     MAX_APERTURE = 0.128  # inner-face gap at full open (nominal/outer is 0.140); see #60
+    PAD_LENGTH = 0.065  # fingertip back to the pad's inner end (#189)
+    MIN_ENCOMPASSING_DIAMETER = 0.090  # Robotiq manual, Specifications (#189)
     CLOSED_REACH = (  # (pad gap, reach past the palm) [m]; see the class docstring
         (0.0001, 0.1387),
         (0.0125, 0.1384),
@@ -1714,6 +1863,8 @@ class Robotiq2F140(ParallelJawGripper):
         super().__init__(
             finger_length=self.FINGER_LENGTH,
             max_aperture=self.MAX_APERTURE,
+            pad_length=self.PAD_LENGTH,
+            min_encompassing_diameter=self.MIN_ENCOMPASSING_DIAMETER,
         )
 
 
@@ -1741,6 +1892,11 @@ class Robotiq2F85(ParallelJawGripper):
       *between* the inner faces, not between outer edges). Old
       ``0.098 m`` was outer-face to outer-face and would claim the
       gripper fits objects it can't.
+    - ``PAD_LENGTH = 0.0375 m`` — the pads (``pad_box1`` and ``pad_box2``) run from
+      21.7 to 59.2 mm past the palm, measured the same way; inward of them is the
+      linkage (#189).
+    - ``MIN_ENCOMPASSING_DIAMETER = 0.043 m`` — Robotiq's minimum encompassing object
+      diameter (2F-85/2F-140 instruction manual, section 6, Specifications).
 
     ``CLOSED_REACH`` is the fingertips' reach as the hand closes (#193). Like the 2F-140,
     the 2F-85 is a four-bar hand whose pads swing forward as they close: closed on a 40 mm
@@ -1762,6 +1918,8 @@ class Robotiq2F85(ParallelJawGripper):
 
     FINGER_LENGTH = 0.059
     MAX_APERTURE = 0.085
+    PAD_LENGTH = 0.0375  # fingertip back to the pad's inner end (#189)
+    MIN_ENCOMPASSING_DIAMETER = 0.043  # Robotiq manual, Specifications (#189)
     CLOSED_REACH = (  # (pad gap, reach past the palm) [m]; see the class docstring
         (0.0004, 0.0726),
         (0.0098, 0.0728),
@@ -1786,6 +1944,8 @@ class Robotiq2F85(ParallelJawGripper):
         super().__init__(
             finger_length=self.FINGER_LENGTH,
             max_aperture=self.MAX_APERTURE,
+            pad_length=self.PAD_LENGTH,
+            min_encompassing_diameter=self.MIN_ENCOMPASSING_DIAMETER,
         )
 
 

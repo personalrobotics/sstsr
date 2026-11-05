@@ -183,11 +183,26 @@ class GripperSpec:
     name: str  # "ParallelJawGripper" or a NAMED_GRIPPERS key
     finger_length: float
     max_aperture: float
+    pad_length: Optional[float] = None  # gripping surfaces of a generic hand (#189)
+    min_encompassing_diameter: Optional[float] = None
 
     def build(self) -> ParallelJawGripper:
         if self.name in NAMED_GRIPPERS:
             return NAMED_GRIPPERS[self.name]()
-        return ParallelJawGripper(finger_length=self.finger_length, max_aperture=self.max_aperture)
+        return ParallelJawGripper(finger_length=self.finger_length, max_aperture=self.max_aperture, **self.surfaces)
+
+    @property
+    def surfaces(self) -> Dict[str, Optional[float]]:
+        """The hand's gripping surfaces, as the oracle takes them; a named hand's own."""
+        if self.name in NAMED_GRIPPERS:
+            g = NAMED_GRIPPERS[self.name]()
+            return {"pad_length": g.pad_length, "min_encompassing_diameter": g.min_encompassing_diameter}
+        return {"pad_length": self.pad_length, "min_encompassing_diameter": self.min_encompassing_diameter}
+
+    @property
+    def oracle_hand(self) -> Dict[str, object]:
+        """What the oracle takes of the hand beyond L and A: its surfaces and closed reach (#193)."""
+        return {**self.surfaces, "closed_reach": self.build().CLOSED_REACH}
 
     def with_dims(self, finger_length: float, max_aperture: float) -> "GripperSpec":
         return GripperSpec("ParallelJawGripper", finger_length, max_aperture)
@@ -239,7 +254,12 @@ def gripper_specs(draw, named: bool = True) -> GripperSpec:
         g = NAMED_GRIPPERS[name]()
         return GripperSpec(name, g.finger_length, g.max_aperture)
     scale = draw(st.sampled_from([0.01, 0.1, 1.0]))  # mm-, cm-, and m-scale hands
-    return GripperSpec(name, scale * draw(_ratio(0.2, 2.0)), scale * draw(_ratio(0.2, 3.0)))
+    L, A = scale * draw(_ratio(0.2, 2.0)), scale * draw(_ratio(0.2, 3.0))
+    if not draw(st.booleans()):
+        return GripperSpec(name, L, A)
+    # A hand that grips on pads, and perhaps encompasses (#189).
+    pad = L * draw(_ratio(0.1, 1.0))
+    return GripperSpec(name, L, A, pad, draw(st.one_of(st.none(), _ratio(0.05, 1.0).map(lambda u: A * u))))
 
 
 @st.composite
@@ -298,7 +318,9 @@ def grasp_cases(draw, factories: Sequence[str] = tuple(FACTORIES), named: bool =
 _STRADDLE_FLOOR = 4.0
 
 
-def boundary_clearances(spec: Factory, dims: Dict[str, float], L: float, A: float) -> List[float]:
+def boundary_clearances(
+    spec: Factory, dims: Dict[str, float], L: float, A: float, pad_length: Optional[float] = None
+) -> List[float]:
     """Clearances that place a boundary **active for this factory** exactly (#126).
 
     Factory-aware, not merely primitive-aware: a cap band is irrelevant to
@@ -343,6 +365,12 @@ def boundary_clearances(spec: Factory, dims: Dict[str, float], L: float, A: floa
         cands += [A - d for d in ds.values()]  # aperture, per span dimension
         cands.append(_STRADDLE_FLOOR * (1e-9 + 1e-6 * scale))  # straddle floor
 
+    if pad_length is not None:
+        cands.append(pad_length / 2)  # the pad band closes at c == P/2 (#189)
+        if primitive in ("sphere", "cylinder"):
+            r = _radius(dims)
+            cands.append((min(L, 2 * r) - r - pad_length) / 2)  # the encompassing band
+
     del name
     return [c for c in cands if c >= 0.0 and math.isfinite(c)]
 
@@ -358,7 +386,7 @@ def boundary_cases(draw, factories: Sequence[str] = tuple(FACTORIES), named: boo
     """A case whose clearance sits on a feasibility boundary, or one ulp either side."""
     case = draw(grasp_cases(factories, named=named))
     L, A = case.gripper.finger_length, case.gripper.max_aperture
-    cands = boundary_clearances(case.spec, case.dims, L, A)
+    cands = boundary_clearances(case.spec, case.dims, L, A, case.gripper.surfaces["pad_length"])
     if not cands:
         return case.replace(options={**case.options, "preshape": None, "clearance": 0.0})
     c = _nudge(draw(st.sampled_from(cands)), draw(st.sampled_from([-1, 0, 1])))
@@ -397,7 +425,7 @@ def bw_samples(t, rng: Optional[np.random.Generator] = None, n_interior: int = 2
 
 def _label(t) -> str:
     p = t.provenance
-    return f"{p.mode}/{p.approach}/{p.finger_orientation}/{p.symmetry}#{p.depth_index}"
+    return f"{p.mode}/{p.approach}/{p.finger_orientation}/{p.symmetry}/{p.grip}#{p.depth_index}"
 
 
 def certify_pose(case: GraspCase, t, pose, *, prim=None, approach: Optional[str] = None):
@@ -412,6 +440,8 @@ def certify_pose(case: GraspCase, t, pose, *, prim=None, approach: Optional[str]
         mode=p.mode,
         approach=approach if approach is not None else p.approach,
         finger_orientation=p.finger_orientation,
+        grip=p.grip,
+        **case.gripper.oracle_hand,
     )
 
 
@@ -549,6 +579,8 @@ def symmetry_failures(case: GraspCase, templates, theta: float = 0.7) -> List[st
                     mode=label_map.get(p.mode, p.mode),
                     approach=label_map.get(p.approach, p.approach),
                     finger_orientation=p.finger_orientation,
+                    grip=p.grip,
+                    **case.gripper.oracle_hand,
                 )
                 if not w.ok:
                     out.append(f"{_label(t)} under {name}: {w.failed}")
@@ -617,7 +649,15 @@ def serialization_failures(case: GraspCase, templates) -> List[str]:
 
 def family_key(p) -> Tuple:
     """The depth family key of #120: every provenance field except the depth fields."""
-    return (p.primitive, p.mode, p.approach, p.finger_orientation, p.symmetry, tuple(sorted(p.metadata.items())))
+    return (
+        p.primitive,
+        p.mode,
+        p.approach,
+        p.finger_orientation,
+        p.symmetry,
+        p.grip,
+        tuple(sorted(p.metadata.items())),
+    )
 
 
 def structured_key(p) -> Tuple:
@@ -741,7 +781,7 @@ def monotonicity_failures(case: GraspCase, attr: str, factor: float = 2.0) -> Li
     dims = {"finger_length": spec.finger_length, "max_aperture": spec.max_aperture}
     before = {family_key(t.provenance) for t in case.run(gripper=spec.build())}
     dims[attr] *= factor
-    bigger = ParallelJawGripper(**dims)
+    bigger = ParallelJawGripper(**dims, **spec.surfaces)
     after = {family_key(t.provenance) for t in case.run(gripper=bigger)}
     lost = before - after
     return [f"{attr} x{factor} lost families {sorted(lost)}"] if lost else []
@@ -839,7 +879,7 @@ def mutate_clearance_term(case: GraspCase, templates):
 def mutate_reach(case: GraspCase, templates):
     """Generate with 1.5x finger length, certify with the real gripper."""
     spec = case.gripper
-    longer = ParallelJawGripper(finger_length=spec.finger_length * 1.5, max_aperture=spec.max_aperture)
+    longer = ParallelJawGripper(finger_length=spec.finger_length * 1.5, max_aperture=spec.max_aperture, **spec.surfaces)
     return case.run(gripper=longer)
 
 
@@ -925,6 +965,8 @@ class Boundary:
     # sits on the same value, so certification there is ambiguous by one ulp; presence
     # is still asserted.
     certify_exact: bool = True
+    # The hand's gripping surfaces, from the scale (#189); an ideal jaw when None.
+    surfaces: Optional[Callable[[float], Dict[str, Optional[float]]]] = None
 
     def neighbours(self, c: float) -> Tuple[float, float]:
         """``(below, above)`` the boundary value."""
@@ -987,6 +1029,17 @@ def _is_cap(p):
 
 def _is_radial(p):
     return p.mode in ("surface", "side")
+
+
+def _is_line_pad(p):
+    return p.mode in ("surface", "side") and p.grip == "pad"
+
+
+def _pad_face_setup(scale, factory):
+    """A face grasp whose band the pads bind (``pad_length`` below reach and extent)."""
+    if factory in CAP_FACTORIES:
+        return 0.25 * scale, 0.5 * scale, {"cylinder_radius": 0.03125 * scale, "cylinder_height": 0.5 * scale}
+    return _box_setup(scale, factory)
 
 
 def _is_box_face(factory):
@@ -1066,6 +1119,42 @@ BOUNDARIES: Tuple[Boundary, ...] = (
         # ``c`` is lost in that sum, so step relatively.
         relative_step=True,
     ),
+    # Pad band for a line contact (#189): the contacts sit c inside both pad ends, so
+    # [r + c, r + P - c] closes at c == P/2. Long fingers keep the palm limit slack; for
+    # the torus the far surface 2r - c closes at the same value, by construction.
+    Boundary(
+        name="pad_band_half",
+        factories=("grasp_sphere", "grasp_cylinder_side", "grasp_cylinder", "grasp_torus_side", "grasp_torus"),
+        setup=lambda s, f: _radial_setup(s, f, 0.25, 0.0625),
+        clearance=lambda L, A, d, f: L / 8,  # P = L/4
+        family=_is_line_pad,
+        # c is added to r on both band ends, where one ulp of c is lost: step relatively.
+        relative_step=True,
+        surfaces=lambda s: {"pad_length": 0.0625 * s},
+    ),
+    # Pad band for a face contact (#189): the face is gripped from the fingertip back to
+    # the insertion depth, so [c, P - c] closes at c == P/2 when the pads are shortest.
+    Boundary(
+        name="pad_face_band_half",
+        factories=CAP_FACTORIES + BOX_FACE_FACTORIES,
+        setup=_pad_face_setup,
+        clearance=lambda L, A, d, f: L / 8,  # P = L/4
+        family=lambda p: p.grip == "pad",  # narrowed per factory in boundary_transition_failures
+        surfaces=lambda s: {"pad_length": 0.0625 * s},
+    ),
+    # Encompassing band (#189): contacts c behind the pads with the palm c outside, so
+    # [r + P + c, L - c] closes at c == (L - r - P)/2. The radius is wide enough (2r > L)
+    # that the palm, not the far surface (#193), sets the deep end.
+    Boundary(
+        name="encompassing_band",
+        factories=("grasp_sphere", "grasp_cylinder_side", "grasp_cylinder"),
+        setup=lambda s, f: _radial_setup(s, f, 0.25, 0.15),
+        clearance=lambda L, A, d, f: (L - _radius(d) - L / 4) / 2,  # P = L/4
+        family=lambda p: p.grip == "encompassing",
+        # c is added to r on both band ends, where one ulp of c is lost: step relatively.
+        relative_step=True,
+        surfaces=lambda s: {"pad_length": 0.0625 * s, "min_encompassing_diameter": 0.0625 * s},
+    ),
     # Scale-aware straddle floor: the default preshape span + c clears each pad by
     # 2*atol only for c >= 4*length_atol(scale) (#107, #129). Feasible ABOVE it.
     Boundary(
@@ -1084,7 +1173,7 @@ BOUNDARIES: Tuple[Boundary, ...] = (
 def boundary_triplet(b: Boundary, factory: str, scale: float) -> List[Tuple[str, GraspCase, bool]]:
     """``(position, case, expect_family)`` for below / exact / above the boundary."""
     L, A, dims = b.setup(scale, factory)
-    spec = GripperSpec("ParallelJawGripper", L, A)
+    spec = GripperSpec("ParallelJawGripper", L, A, **(b.surfaces(scale) if b.surfaces else {}))
     value = b.clearance(L, A, dims, factory)
     below, above = b.neighbours(value)
     out = []
@@ -1115,7 +1204,11 @@ def straddle_floor_preshape(span: float, scale: float) -> float:
 
 def boundary_transition_failures(b: Boundary, factory: str, scale: float) -> List[str]:
     """The family appears on the feasible side, vanishes on the other, and is sound."""
-    family = _is_box_face(factory) if b.name == "box_approach_band" else b.family
+    family = b.family
+    if b.name == "box_approach_band":
+        family = _is_box_face(factory)
+    elif b.name == "pad_face_band_half":
+        family = _is_cap if factory in CAP_FACTORIES else _is_box_face(factory)
     out: List[str] = []
     for position, case, expect in boundary_triplet(b, factory, scale):
         templates = [t for t in case.run() if family(t.provenance)]
