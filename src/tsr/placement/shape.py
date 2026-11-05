@@ -29,6 +29,7 @@ import numpy as np
 from scipy.spatial import ConvexHull, QhullError
 
 from ..core.tsr import _check_frame
+from ._stable_poses import _plane_basis
 
 #: Points per circle where a circle is sampled: a cylinder's rims, a sphere's surface.
 _CIRCLE = 64
@@ -46,7 +47,8 @@ def _positive(name: str, value) -> float:
 
 
 def _pose(value) -> np.ndarray:
-    T = _check_frame("pose", np.eye(4) if value is None else value)
+    """A validated copy of ``value``: a part never shares, or freezes, the caller's array."""
+    T = np.array(_check_frame("pose", np.eye(4) if value is None else value), dtype=float)
     T.setflags(write=False)
     return T
 
@@ -61,10 +63,7 @@ def _fibonacci(n: int) -> np.ndarray:
 
 
 def _circle(centre: np.ndarray, axis: np.ndarray, radius: float, n: int) -> np.ndarray:
-    seed = np.array([1.0, 0.0, 0.0]) if abs(axis[0]) < 0.9 else np.array([0.0, 1.0, 0.0])
-    u = seed - np.dot(seed, axis) * axis
-    u /= np.linalg.norm(u)
-    v = np.cross(axis, u)
+    u, v = _plane_basis(axis).T
     a = np.linspace(0.0, 2 * math.pi, n, endpoint=False)
     return centre + radius * (np.outer(np.cos(a), u) + np.outer(np.sin(a), v))
 
@@ -271,10 +270,14 @@ class Hull(_Part):
 
     def __post_init__(self):
         v = np.asarray(self.vertices, dtype=float)
-        if v.ndim != 2 or v.shape[1] != 3 or len(v) == 0:
-            raise ValueError(f"vertices must have shape (N, 3) with N >= 1, got {v.shape}")
+        if v.ndim != 2 or v.shape[1] != 3:
+            raise ValueError(f"vertices must have shape (N, 3), got {v.shape}")
         if not np.all(np.isfinite(v)):
             raise ValueError("vertices must be finite")
+        try:
+            ConvexHull(v)
+        except (QhullError, ValueError) as e:
+            raise ValueError(f"vertices must span a volume: {len(v)} given, coplanar or fewer than 4") from e
         pose = _pose(self.pose)
         world = v @ pose[:3, :3].T + pose[:3, 3]
         world.setflags(write=False)

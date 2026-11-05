@@ -723,11 +723,12 @@ class StablePlacer:
         if not isinstance(shape, Shape):
             raise ValueError(f"shape must be a tsr.placement.Shape, got {type(shape).__name__}")
         _check_finite("min_margin_deg", min_margin_deg)
-        scale = float(np.ptp(shape.surface(), axis=0).max())
+        surface = shape.surface()
+        scale = float(np.ptp(surface, axis=0).max())
         part = shape.parts[0] if len(shape.parts) == 1 else None
         if isinstance(part, (Box, Cylinder, Sphere)) and np.linalg.norm(shape.com - part.centre) <= length_atol(scale):
             return self._place_part(part, subject, min_margin_deg, scale)
-        return self._place_parts(shape, subject, min_margin_deg, scale)
+        return self._place_parts(shape, surface, subject, min_margin_deg, scale)
 
     def _place_part(self, part, subject: str, min_margin_deg: float, scale: float) -> List[TSRTemplate]:
         """A single primitive, placed by its exact factory in its own frame and re-framed
@@ -744,9 +745,10 @@ class StablePlacer:
         R_object_part, t_object_part = part.pose[:3, :3], part.pose[:3, 3]
         centred = np.linalg.norm(t_object_part) <= length_atol(scale)
         out = []
-        for index, t in enumerate(templates):
-            R_part = t.Tw_e[:3, :3]
-            R = R_part @ R_object_part.T  # the object's rotation once the part rests
+        for t in templates:
+            # The object's rotation once the part rests. A sphere's own rotation means
+            # nothing, so a sphere leaves the object as it is framed.
+            R = np.eye(3) if primitive == "sphere" else t.Tw_e[:3, :3] @ R_object_part.T
             height = float(t.T_ref_tsr[2, 3] - (R @ t_object_part)[2])
             footprint = part.reach(R)
             if not self._fits(footprint, scale):
@@ -758,7 +760,7 @@ class StablePlacer:
                 self._template(
                     name=t.name,
                     description=t.description,
-                    variant=t.variant if normal is None else _face_label(normal, index),
+                    variant=t.variant if normal is None else _face_label(normal, f"{primitive} {t.variant}"),
                     R=R,
                     origin_height=height,
                     Bw=self._bw(footprint, roll_range=free, pitch_range=free),
@@ -777,12 +779,14 @@ class StablePlacer:
             return self._log_empty("place", "exceeds_surface", "no rest's footprint about the object origin fits")
         return out
 
-    def _place_parts(self, shape: Shape, subject: str, min_margin_deg: float, scale: float) -> List[TSRTemplate]:
+    def _place_parts(
+        self, shape: Shape, surface: np.ndarray, subject: str, min_margin_deg: float, scale: float
+    ) -> List[TSRTemplate]:
         """A compound, or a part placed off its centre of mass: rests on its convex hull's
         faces that the true parts support."""
         atol = length_atol(scale)
         com = shape.com
-        candidates = list(stable_poses_mesh(shape.surface(), com))
+        candidates = list(stable_poses_mesh(surface, com))
         rests = []
         for face in candidates:
             n = np.asarray(face.face_normal, dtype=float)
@@ -855,10 +859,11 @@ class StablePlacer:
 _AXIS_LABELS = {(0, -1.0): "-x", (0, 1.0): "+x", (1, -1.0): "-y", (1, 1.0): "+y", (2, -1.0): "-z", (2, 1.0): "+z"}
 
 
-def _face_label(normal: np.ndarray, index: int) -> str:
-    """The object-frame face a variant names: ``"-z"`` and the like for a face along an
-    axis, and ``"face-k"`` otherwise, since the label is a claim about the face."""
+def _face_label(normal: np.ndarray, part_face: str) -> str:
+    """The face a variant names, since the label is a claim about the face: ``"-z"`` and
+    the like for an object-frame face along an axis, and otherwise the part's own face
+    (``"box -z"``), which stays the same face whatever else is filtered out."""
     axis = int(np.argmax(np.abs(normal)))
     if abs(abs(normal[axis]) - 1.0) <= 1e-9:
         return _AXIS_LABELS[(axis, float(np.sign(normal[axis])))]
-    return f"face-{index + 1}"
+    return part_face

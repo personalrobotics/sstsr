@@ -429,9 +429,11 @@ choice of method, under the same clauses:
   factory, and each template is re-framed at the object origin: `Tw_e` is the object's
   resting rotation, a pure rotation, the origin's height goes in `T_ref_tsr`, and the
   footprint is taken about the origin. A sphere off the origin keeps the object's roll and
-  pitch fixed: rolling would move the origin through the sphere's centre, not about it. A
-  variant names the resting face's object-frame normal, as `"-z"` along an axis and
-  `"face-k"` otherwise.
+  pitch fixed, at the object's own orientation: rolling would move the origin through the
+  sphere's centre, not about it, and a sphere's rotation means nothing. A
+  variant names the resting face: its object-frame normal as `"-z"` along an axis, and
+  otherwise the part's own face (`"box -z"`), so the label does not depend on what else
+  was filtered out.
 - **Anything else** rests on a face of its convex hull, found from points on the parts'
   surfaces and kept only if the **true** parts support it. The resting height is the
   parts' exact support `max_i h_i(n)`, the contact patch is the parts' own points on that

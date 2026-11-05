@@ -293,6 +293,7 @@ def test_non_finite_shape_arguments_raise_naming_the_argument(build, argument, b
         (lambda: tp.Shape([]), "parts"),
         (lambda: tp.Shape(tp.Sphere(0.05)), "parts"),  # one part, not a sequence of them
         (lambda: tp.Shape([np.eye(4)]), "parts"),
+        (lambda: tp.Hull([[0, 0, 0], [1, 0, 0], [0, 1, 0], [1, 1, 0]]), "vertices"),  # flat
         (lambda: StablePlacer(0.3, 0.2).place([tp.Sphere(0.05)]), "Shape"),
     ],
 )
@@ -329,6 +330,38 @@ def test_place_frames_an_object_off_its_part():
     upright = StablePlacer(table_x=0.30, table_y=0.20).place(tp.Shape([tp.Cylinder(0.033, 0.123, pose=T)]))[0]
     assert upright.variant == "-z"
     np.testing.assert_allclose(upright.instantiate(np.eye(4)).to_transform(np.zeros(6)), np.eye(4), atol=1e-12)
+
+
+def test_a_part_copies_its_pose():
+    """A caller may reuse one buffer for every geom's pose."""
+    T = np.eye(4)
+    part = tp.Cylinder(0.03, 0.1, pose=T)
+    T[2, 3] = 0.5
+    assert T.flags.writeable and part.pose[2, 3] == 0.0
+
+
+def test_a_variant_names_the_same_face_whatever_is_filtered():
+    """A turned box's faces off the object's axes are named by the box's own faces, so a
+    stricter ``min_margin_deg`` drops faces without renaming the ones it keeps."""
+    from scipy.spatial.transform import Rotation
+
+    T = np.eye(4)
+    T[:3, :3] = Rotation.from_euler("x", 30, degrees=True).as_matrix()
+    shape = tp.Shape([tp.Box((0.1, 0.2, 0.4), pose=T)])
+    placer = StablePlacer(table_x=1.0, table_y=1.0)
+    every = {t.variant: t.provenance.face_normal for t in placer.place(shape)}
+    strict = {t.variant: t.provenance.face_normal for t in placer.place(shape, min_margin_deg=20.0)}
+    assert strict and len(strict) < len(every)
+    assert all(every[v] == n for v, n in strict.items())
+
+
+def test_an_off_centre_sphere_leaves_the_object_as_framed():
+    """A sphere's own rotation means nothing, so it cannot tilt the object it is part of."""
+    T = np.eye(4)
+    T[:3, :3] = np.array([[1, 0, 0], [0, 0, -1], [0, 1, 0]], float)  # turned 90° about x
+    T[:3, 3] = [0.1, 0.0, 0.05]
+    (t,) = StablePlacer(table_x=1.0, table_y=1.0).place(tp.Shape([tp.Sphere(0.05, pose=T)]))
+    np.testing.assert_allclose(t.Tw_e[:3, :3], np.eye(3), atol=1e-12)
 
 
 @matrix_settings(250)
