@@ -224,6 +224,26 @@ p.equilibrium        # 'stable', or 'neutral' for a sphere that rolls
 p.footprint_radius   # the inset applied to Bw's xy bounds
 ```
 
+#### Releasing into a container
+
+`OpeningPlacer` releases an object into a container through its opening, given as a
+rectangle's extents or a circle's radius with the depth to the floor, framed on the rim
+plane with z pointing out. Each template is one of the object's resting orientations
+(`StablePlacer.place`'s rests), with the whole object inside the opening by `clearance`
+at every yaw and its lowest point at the heights `lowest` above the rim plane:
+
+```python
+from tsr.placement import OpeningPlacer
+
+placer = OpeningPlacer(size=(0.238, 0.238), depth=0.757)    # or radius=0.08 for a circle
+templates = placer.place(bottle, lowest=(0.02, 0.10), clearance=0.026)
+pose = templates[0].sample(T_world_opening)
+```
+
+A tall bottle comes back standing only: lying, it rolls, so it has no rest on its side.
+An object with no resting orientation that fits returns `[]`, with `exceeds_opening`
+logged. Where the object comes to rest once released is not part of the contract.
+
 ### Work directly with TSRs
 
 ```python

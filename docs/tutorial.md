@@ -502,6 +502,39 @@ placer.place_mesh(verts, com)                        # 50 poses: 2 caps + 48 sid
 placer.place_mesh(verts, com, min_margin_deg=4.2)    # 2 poses: the caps, as place_cylinder
 ```
 
+### Releasing into a Container
+
+A container is entered through its opening, not placed on. `OpeningPlacer` takes the
+opening as a rectangle's full extents (`size`) or a circle's `radius`, with its `depth`
+from the rim to the floor, framed on the rim plane with z pointing out of the container.
+Each template releases the object in one of the resting orientations `StablePlacer.place`
+finds, so it falls as it rests:
+
+```python
+from tsr.placement import OpeningPlacer
+
+placer = OpeningPlacer(size=(0.238, 0.238), depth=0.757)
+templates = placer.place(
+    shape,
+    lowest=(0.02, 0.10),   # the object's lowest point, 2 to 10 cm above the rim
+    clearance=0.026,       # how far inside the opening the whole object stays
+)
+```
+
+Bw structure for release templates:
+- `[±hx, ±hy]` — the object origin slides where the footprint, swept through every
+  yaw, stays `clearance` inside the opening: `size/2 − clearance − footprint` for a
+  rectangle, and for a circle the square inscribed in the circle of radius
+  `radius − clearance − footprint`.
+- `z = lowest` — the object's lowest point, from below the rim (negative, no lower than
+  the floor) to above it. As for placements, the resting height of the origin is in
+  `T_ref_tsr`.
+- roll, pitch and yaw as the rest's: fixed by `Tw_e`, yaw free.
+
+The container is taken to be the opening's section straight down to its floor. Where
+the object comes to rest once let go is not part of the contract: check that in the
+application.
+
 ---
 
 ## Visualization
@@ -652,6 +685,7 @@ plan = cbirrt.plan(start=q_start, goal=q_goal, constraints=[pour_tsr])
 | **TSRTemplate** | Serializable, reusable constraint bound at runtime |
 | **ParallelJawGripper** | Programmatic grasp templates from object geometry |
 | **StablePlacer** | Programmatic placement templates; one per stable pose |
+| **OpeningPlacer** | Release templates into a container's opening; one per resting orientation that fits |
 | **tsr.viser** | Interactive 3D inspection in a browser (`show_templates`, `explore_templates`, `studio`) |
 
 TSRs are a single abstraction that covers grasping, placement, and trajectory constraints — the difference lies only in what $T_0^w$ refers to and how $B_w$ shapes the valid region.

@@ -12,7 +12,8 @@ manipulation planning. The package is layered:
   recipe that instantiates to a concrete TSR at a reference pose.
 * **factories** — domain knowledge that *produces* templates:
   :class:`ParallelJawGripper` (and ready-made hands) for grasps, and
-  :class:`StablePlacer` for placements.
+  :class:`StablePlacer` for placements on a surface and :class:`OpeningPlacer` for
+  releases into a container.
 * **services** — :mod:`tsr.io` (persistence), sampling helpers, and the
   optional :mod:`tsr.viser` viewer (install with the ``viz`` or ``viser`` extra).
 
@@ -50,7 +51,7 @@ from .template import Provenance, TSRTemplate
 
 # --- Layer 2: factories (domain knowledge -> recipes) -------------------------
 from .hands import FrankaHand, GripperBase, KinovaJaco2TwoFinger, ParallelJawGripper, Robotiq2F85, Robotiq2F140
-from .placement import StablePlacer
+from .placement import OpeningPlacer, StablePlacer
 
 # --- Layer 3: services --------------------------------------------------------
 # Where the C++ core's headers and CMake package live, for a C++ consumer to find them
@@ -115,6 +116,7 @@ __all__ = [
     "FrankaHand",
     "KinovaJaco2TwoFinger",
     "StablePlacer",
+    "OpeningPlacer",
     # sampling helpers
     "choose_tsr",
     "choose_tsr_index",

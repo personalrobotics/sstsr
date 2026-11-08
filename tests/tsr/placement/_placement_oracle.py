@@ -29,7 +29,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import List, Optional, Tuple
+from typing import Any, List, Optional, Tuple
 
 import numpy as np
 
@@ -335,3 +335,57 @@ def certify(prim, pose: np.ndarray, *, table: Tuple[float, float], atol: Optiona
         failed.append((3, f"extends {over[worst]:.6g} m beyond the surface"))
 
     return PlacementWitness(not failed, lowest, float(prim.support(_FAN, R).max()), float(margin), failed)
+
+
+def certify_release(
+    prim,
+    pose: np.ndarray,
+    *,
+    opening: Tuple[str, Any],
+    lowest: Tuple[float, float],
+    clearance: float,
+    atol: Optional[float] = None,
+) -> PlacementWitness:
+    """Certify that ``pose`` releases ``prim`` into a container through its opening (#200).
+
+    Args:
+        prim: One of the primitives above, in its own frame.
+        pose: 4x4 object pose in the opening frame (``z = 0`` is the rim plane, z out).
+        opening: ``("rectangle", (x, y))``, full extents, or ``("circle", radius)``.
+        lowest: The heights the object's lowest point may take above the rim plane.
+        clearance: How far inside the opening the whole object must stay.
+        atol: Length tolerance; the scale-aware contract value by default.
+
+    Clauses of the release contract:
+
+    * ``1`` **resting** -- moved down onto the rim plane, the object is a stable
+      placement there (the surface clauses 1 and 2), so it is released as it rests;
+    * ``2`` **inside** -- the whole object lies inside the opening by ``clearance``;
+    * ``3`` **at its height** -- its lowest point is within ``lowest`` of the rim plane.
+    """
+    R, t = pose[:3, :3], pose[:3, 3]
+    atol = length_atol(prim.scale) if atol is None else atol
+    failed: List[Tuple[int, str]] = []
+
+    lowest_z = float(t[2] - prim.support(-_Z, R))
+    rested = np.array(pose, dtype=float)
+    rested[2, 3] -= lowest_z
+    on_rim = certify(prim, rested, table=(1.0e6, 1.0e6), atol=atol)
+    failed += [(1, message) for clause, message in on_rim.failed if clause in (1, 2)]
+
+    # The opening's own support, less the clearance, bounds the body's in every direction.
+    reach = _FAN[:, :2] @ t[:2] + prim.support(_FAN, R)
+    kind, extent = opening
+    if kind == "rectangle":
+        limit = (extent[0] / 2 - clearance) * np.abs(_FAN[:, 0]) + (extent[1] / 2 - clearance) * np.abs(_FAN[:, 1])
+    else:
+        limit = np.full(len(_FAN), float(extent) - clearance)
+    over = reach - limit
+    worst = int(np.argmax(over))
+    if over[worst] > atol:
+        failed.append((2, f"extends {over[worst]:.6g} m past the opening's clearance"))
+
+    if not lowest[0] - atol <= lowest_z <= lowest[1] + atol:
+        failed.append((3, f"lowest point {lowest_z:.6g} m from the rim, outside {lowest}"))
+
+    return PlacementWitness(not failed, lowest_z, float(prim.support(_FAN, R).max()), on_rim.support_margin, failed)
