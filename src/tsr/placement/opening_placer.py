@@ -68,7 +68,7 @@ class OpeningPlacer:
         if (size is None) == (radius is None):
             raise ValueError("give exactly one of size (a rectangle) or radius (a circle)")
         if size is not None:
-            if len(size) != 2:
+            if not isinstance(size, (tuple, list, np.ndarray)) or len(size) != 2:
                 raise ValueError(f"size must be (x, y), got {size!r}")
             self.size: Optional[Tuple[float, float]] = (
                 _check_positive_finite("size[0]", size[0]),
@@ -80,14 +80,19 @@ class OpeningPlacer:
             self.radius = _check_positive_finite("radius", radius)
         self.reference = reference
 
-    def _halves(self, footprint: float, clearance: float) -> Tuple[float, float]:
+    def _halves(self, footprint: float, clearance: float, atol: float) -> Optional[Tuple[float, float]]:
         """The half-extents of the ``xy`` box the object origin may slide in, so that a
         footprint of this radius, swept through every yaw, stays ``clearance`` inside the
         opening: the rectangle inset by both, or the square inscribed in the circle of
-        the radius left. Negative when it does not fit."""
+        the radius left. None when it does not fit by more than ``atol``, which bounds the
+        room itself, before a circle's is turned into a square's."""
         if self.size is not None:
-            return (self.size[0] / 2 - clearance - footprint, self.size[1] / 2 - clearance - footprint)
-        half = (self.radius - clearance - footprint) / math.sqrt(2.0)
+            room = (self.size[0] / 2 - clearance - footprint, self.size[1] / 2 - clearance - footprint)
+            return None if min(room) < -atol else (max(room[0], 0.0), max(room[1], 0.0))
+        room = self.radius - clearance - footprint
+        if room < -atol:
+            return None
+        half = max(room, 0.0) / math.sqrt(2.0)
         return (half, half)
 
     def place(
@@ -120,12 +125,12 @@ class OpeningPlacer:
         """
         if not isinstance(shape, Shape):
             raise ValueError(f"shape must be a tsr.placement.Shape, got {type(shape).__name__}")
-        if len(lowest) != 2:
+        if not isinstance(lowest, (tuple, list, np.ndarray)) or len(lowest) != 2:
             raise ValueError(f"lowest must be (low, high), got {lowest!r}")
         low, high = _check_finite("lowest[0]", lowest[0]), _check_finite("lowest[1]", lowest[1])
         if low > high:
             raise ValueError(f"lowest must have low <= high, got {lowest!r}")
-        if low < -self.depth:
+        if low < -self.depth - length_atol(self.depth):
             raise ValueError(f"lowest[0] = {low!r} is below the floor, {self.depth!r} below the rim")
         clearance = _check_finite("clearance", clearance)
         if clearance < 0.0:
@@ -137,12 +142,13 @@ class OpeningPlacer:
         atol = length_atol(float(np.ptp(shape.surface(), axis=0).max()))
         templates = []
         for t in rests:
-            hx, hy = self._halves(t.provenance.footprint_radius, clearance)
-            if hx < -atol or hy < -atol:
+            halves = self._halves(t.provenance.footprint_radius, clearance, atol)
+            if halves is None:
                 continue
+            hx, hy = halves
             Bw = np.array(t.Bw, dtype=float)
-            Bw[0] = (-max(hx, 0.0), max(hx, 0.0))
-            Bw[1] = (-max(hy, 0.0), max(hy, 0.0))
+            Bw[0] = (-hx, hx)
+            Bw[1] = (-hy, hy)
             Bw[2] = (low, high)
             templates.append(
                 TSRTemplate(

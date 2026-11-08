@@ -41,6 +41,13 @@ _Z = np.array([0.0, 0.0, 1.0])
 _FAN = np.stack([np.array([math.cos(a), math.sin(a), 0.0]) for a in np.linspace(0.0, 2 * math.pi, 180, endpoint=False)])
 
 
+#: Horizontal directions for a circular opening's containment clause: 1 − cos(π/4096) is
+#: 3e-7, below the length tolerance's 1e-6 of the scale for any object within it.
+_FINE_FAN = np.stack(
+    [np.array([math.cos(a), math.sin(a), 0.0]) for a in np.linspace(0.0, 2 * math.pi, 4096, endpoint=False)]
+)
+
+
 def length_atol(scale: float) -> float:
     """Scale-aware length tolerance ``1e-9 + 1e-6 · scale`` (the geometric contract)."""
     return 1e-9 + 1e-6 * float(scale)
@@ -375,11 +382,15 @@ def certify_release(
 
     # The opening's own support, less the clearance, bounds the body's in every direction.
     reach = _FAN[:, :2] @ t[:2] + prim.support(_FAN, R)
+    # A rectangle's bound is decided along its axes, which the fan holds exactly; a
+    # circle's, in every direction, so it takes a fan fine enough that what lies between
+    # its directions, |t|·(1 − cos(π/n)), is below the length tolerance.
     kind, extent = opening
     if kind == "rectangle":
         limit = (extent[0] / 2 - clearance) * np.abs(_FAN[:, 0]) + (extent[1] / 2 - clearance) * np.abs(_FAN[:, 1])
     else:
-        limit = np.full(len(_FAN), float(extent) - clearance)
+        reach = _FINE_FAN[:, :2] @ t[:2] + prim.support(_FINE_FAN, R)
+        limit = np.full(len(_FINE_FAN), float(extent) - clearance)
     over = reach - limit
     worst = int(np.argmax(over))
     if over[worst] > atol:

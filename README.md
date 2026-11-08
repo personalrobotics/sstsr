@@ -240,7 +240,8 @@ templates = placer.place(bottle, lowest=(0.02, 0.10), clearance=0.026)
 pose = templates[0].sample(T_world_opening)
 ```
 
-A tall bottle comes back standing only: lying, it rolls, so it has no rest on its side.
+A tall bottle comes back only on an end, its base or its cap: lying, it rolls, so it has
+no rest on its side.
 An object with no resting orientation that fits returns `[]`, with `exceeds_opening`
 logged. Where the object comes to rest once released is not part of the contract.
 

@@ -97,14 +97,13 @@ BIN_DEPTH = 0.757
 BIN_CLEARANCE = 0.026
 
 
-def test_a_tall_bottle_is_released_only_standing():
-    """A 0.22 m bottle lying rolls, so it has no rest on its side, and standing it fits."""
+def test_a_tall_bottle_is_released_only_on_an_end():
+    """A 0.22 m bottle lying rolls, so it has no rest on its side; on its base or its cap
+    it fits, and it is released on each."""
     bottle = place_shape("bottle", 1.0)
     templates = OpeningPlacer(size=BIN[1], depth=BIN_DEPTH).place(bottle, lowest=(0.0, 0.05), clearance=BIN_CLEARANCE)
-    assert templates
-    for t in templates:
-        up = t.Tw_e[:3, :3] @ np.array([0.0, 0.0, 1.0])
-        assert abs(abs(up[2]) - 1.0) < 1e-9, t.variant
+    ups = sorted(round(float((t.Tw_e[:3, :3] @ np.array([0.0, 0.0, 1.0]))[2]), 9) for t in templates)
+    assert ups == [-1.0, 1.0]
     assert not release_failures(bottle, BIN, BIN_DEPTH, (0.0, 0.05), BIN_CLEARANCE, templates=templates)
 
 
@@ -146,6 +145,7 @@ def test_a_footprint_that_fits_only_at_the_centre_is_the_boundary():
         lambda: OpeningPlacer(depth=0.5),
         lambda: OpeningPlacer(size=(0.2, 0.2), radius=0.1, depth=0.5),
         lambda: OpeningPlacer(size=(0.2,), depth=0.5),
+        lambda: OpeningPlacer(size=0.238, depth=0.5),
         lambda: OpeningPlacer(size=(0.2, float("nan")), depth=0.5),
         lambda: OpeningPlacer(radius=-0.1, depth=0.5),
         lambda: OpeningPlacer(radius=0.1, depth=0.0),
@@ -163,6 +163,7 @@ def test_a_malformed_opening_raises(build):
         {"lowest": (-0.6, 0.0)},  # below the floor, 0.5 m down
         {"lowest": (0.0, float("inf"))},
         {"lowest": (0.0,)},
+        {"lowest": 0.05},
         {"lowest": (0.0, 0.1), "clearance": -0.01},
         {"lowest": (0.0, 0.1), "clearance": float("nan")},
     ],
@@ -203,23 +204,24 @@ def _patched(name, value):
         setattr(opl.OpeningPlacer, name, original)
 
 
-def _circle_as_square(self, footprint, clearance):
+def _circle_as_square(self, footprint, clearance, atol):
     """The circle's radius taken as a square's half-extent, overhanging at the corners."""
     if self.size is not None:
-        return (self.size[0] / 2 - clearance - footprint, self.size[1] / 2 - clearance - footprint)
-    return (self.radius - clearance - footprint,) * 2
+        return _HALVES(self, footprint, clearance, atol)
+    room = self.radius - clearance - footprint
+    return None if room < -atol else (max(room, 0.0),) * 2
 
 
-def _no_clearance(self, footprint, clearance):
-    return _HALVES(self, footprint, 0.0)
+def _no_clearance(self, footprint, clearance, atol):
+    return _HALVES(self, footprint, 0.0, atol)
 
 
-def _no_footprint(self, footprint, clearance):
-    return _HALVES(self, 0.0, clearance)
+def _no_footprint(self, footprint, clearance, atol):
+    return _HALVES(self, 0.0, clearance, atol)
 
 
-def _refuse_all(self, footprint, clearance):
-    return (-1.0, -1.0)
+def _refuse_all(self, footprint, clearance, atol):
+    return None
 
 
 def _heights_of_the_origin(place):
