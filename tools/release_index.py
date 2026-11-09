@@ -1,7 +1,8 @@
 """Confirm that a package index serves exactly the files a release built (release.yml).
 
 Reads the index's JSON API for ``sstsr`` at ``--version``, waiting while a new upload is
-not yet listed, and requires its files to be exactly those in ``--sums`` (SHA256SUMS),
+not yet listed, or only some of its files are (an index can list a wheel before its
+sdist), and requires its files to be exactly those in ``--sums`` (SHA256SUMS),
 each with the recorded hash: the hash the index reports, and the hash of the bytes it
 serves when downloaded. Standard library only.
 
@@ -24,13 +25,16 @@ WAIT_S = 600
 POLL_S = 30
 
 
-def _listed(index: str, version: str) -> list[dict]:
+def _listed(index: str, version: str, built: set[str]) -> list[dict]:
+    """The index's files for ``version``, once it lists every built one or any other."""
     url = f"{index}/pypi/sstsr/{version}/json"
     deadline = time.monotonic() + WAIT_S
     while True:
         try:
             with urllib.request.urlopen(url) as response:
-                return json.load(response)["urls"]
+                urls = json.load(response)["urls"]
+            if not {entry["filename"] for entry in urls} < built or time.monotonic() > deadline:
+                return urls
         except urllib.error.HTTPError as error:
             if error.code != 404 or time.monotonic() > deadline:
                 raise SystemExit(f"{url}: {error}") from error
@@ -45,7 +49,7 @@ def main() -> int:
     args = parser.parse_args()
     with open(args.sums) as sums:
         built = {name: digest for digest, name in (line.split() for line in sums)}
-    served = {entry["filename"]: entry for entry in _listed(args.index, args.version)}
+    served = {entry["filename"]: entry for entry in _listed(args.index, args.version, set(built))}
     if set(served) != set(built):
         raise SystemExit(f"{args.index} serves {sorted(served)}, the release built {sorted(built)}")
     for name, entry in sorted(served.items()):
