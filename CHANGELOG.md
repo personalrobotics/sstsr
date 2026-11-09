@@ -4,6 +4,20 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **`OpeningPlacer`** (#200) releases an object into a container through its opening: a
+  rectangle's `size` or a circle's `radius`, with the `depth` to the floor, framed on the
+  rim plane with z out, as prl_assets' `placement.openings` declares it.
+  `place(shape, lowest=(low, high), clearance=...)` returns one template per resting
+  orientation `StablePlacer.place` finds whose footprint, at every yaw, stays `clearance`
+  inside the opening, with the object's lowest point from `low` to `high` above the rim.
+  It returns `[]` when none fits, logging `exceeds_opening`. Exported from `tsr` and
+  `tsr.placement`.
+- The release contract in `docs/ARCHITECTURE.md`, the oracle's `certify_release`, and a
+  mutation gate for it.
+
 ## [4.3.0] — 2026-11
 
 Objects are placed by their parts, and the Robotiq hands grip on their pads.

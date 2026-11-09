@@ -24,6 +24,12 @@ Based on the IJRR paper ["Task Space Regions: A Framework for Pose-Constrained M
 
 *L-shape, T-shape, and a mug (cylinder + handle) — `place_mesh` applied to arbitrary vertex clouds. Each object is shown in all stable orientations above the 5° margin threshold.*
 
+### Releasing into a container
+
+![Releases into a bin's opening](assets/drops.png)
+
+*`OpeningPlacer` over a 0.238 m square bin opening, 26 mm clearance: one region per resting orientation that fits through it. A 0.22 m bottle is released only on an end (lying, it rolls); a box on four of its six faces (lying flat, it is too wide). Each object is shown at its region's centre and, faint, at its corners and other yaws; the green patch is where its origin may slide.*
+
 ## Installation
 
 The distribution is named **`sstsr`** on PyPI; the import name is `tsr`.
@@ -223,6 +229,27 @@ p.face_normal        # (0.0, 0.0, -1.0) in the object frame
 p.equilibrium        # 'stable', or 'neutral' for a sphere that rolls
 p.footprint_radius   # the inset applied to Bw's xy bounds
 ```
+
+#### Releasing into a container
+
+`OpeningPlacer` releases an object into a container through its opening, given as a
+rectangle's extents or a circle's radius with the depth to the floor, framed on the rim
+plane with z pointing out. Each template is one of the object's resting orientations
+(`StablePlacer.place`'s rests), with the whole object inside the opening by `clearance`
+at every yaw and its lowest point at the heights `lowest` above the rim plane:
+
+```python
+from tsr.placement import OpeningPlacer
+
+placer = OpeningPlacer(size=(0.238, 0.238), depth=0.757)    # or radius=0.08 for a circle
+templates = placer.place(bottle, lowest=(0.02, 0.10), clearance=0.026)
+pose = templates[0].sample(T_world_opening)
+```
+
+A tall bottle comes back only on an end, its base or its cap: lying, it rolls, so it has
+no rest on its side.
+An object with no resting orientation that fits returns `[]`, with `exceeds_opening`
+logged. Where the object comes to rest once released is not part of the contract.
 
 ### Work directly with TSRs
 

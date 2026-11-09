@@ -7,7 +7,7 @@ boundary is enforced by `tests/tsr/test_architecture.py`.
 |-------|-----------|------|--------------|
 | **0 — core** | `tsr.core` (`TSR`, `TSRChain`, math helpers) | The pure-math heart: SE(3) geometry, bounds, sampling, distance, serialisation. Robot-agnostic. | NumPy (SciPy only for `TSR.distance_optimize`, since #174 moved the chain's inverse to NumPy) |
 | **1 — recipe** | `tsr.template` (`TSRTemplate`) | A reusable, serialisable, scene-agnostic recipe that instantiates to a concrete `TSR` at a reference pose. | Layer 0 |
-| **2 — factories** | `tsr.hands` (`ParallelJawGripper`, …), `tsr.placement` (`StablePlacer`) | Domain knowledge that *produces* recipes from a described object. | Layers 0–1 |
+| **2 — factories** | `tsr.hands` (`ParallelJawGripper`, …), `tsr.placement` (`StablePlacer`, `OpeningPlacer`) | Domain knowledge that *produces* recipes from a described object. | Layers 0–1 |
 | **3 — services** | `tsr.io`, `tsr.sampling`, `tsr.viser` (optional `viz`/`viser` extra) | Persist, select among, and inspect recipes/TSRs. | Layers 0–2 |
 
 ## The spine
@@ -477,6 +477,51 @@ choice of method, under the same clauses:
 The oracle certifies `place` against a `Compound` of its own primitives, built from the
 shape's public fields: its support is the largest of its parts', and its contact patch
 the union of the patches of the parts that reach the lowest point.
+
+### Releasing into a container through its opening (#200)
+
+`OpeningPlacer` releases an object into a container rather than onto a surface. The
+**opening frame** is centred on the rim plane with `z` pointing out of the container, as
+prl_assets' `placement.openings` declares it; the opening is a rectangle of full extents
+`size`, or a circle of `radius` (the largest inside the rim), with the floor `depth`
+below the rim. The container is taken to be that section straight down to its floor:
+walls that narrow below the rim are not the opening's to know.
+
+For an object `O` and **every** pose a returned template admits, in the opening frame:
+
+1. **Resting** — `O` is in one of its resting orientations: moved down onto the rim
+   plane, it satisfies the surface clauses 1 and 2.
+2. **Inside** — the whole of `O` lies inside the opening by `clearance`, at every yaw
+   the region admits.
+3. **At its height** — the lowest point of `O` is within `lowest = (low, high)` of the
+   rim plane, where `−depth ≤ low ≤ high`.
+
+Construction:
+
+- **The rests are `StablePlacer.place`'s**, found on an unbounded surface, so the same
+  object has the same rests on a table and into a bin, with the same `Tw_e`, `T_ref_tsr`,
+  `variant`, `stability_margin` and provenance.
+- **The `xy` bounds are inset by the footprint radius, as on a surface**, and here by the
+  clearance too: `size/2 − clearance − footprint_radius` for a rectangle. For a circle
+  the origin must stay within `radius − clearance − footprint_radius` of the centre, and
+  the bounds are the square inscribed in that circle, the largest axis-aligned region
+  inside it. Equality is feasible, as elsewhere.
+- **The `z` bounds are `lowest`**: `T_ref_tsr` already puts the lowest point on the rim
+  plane, so the heights move it, at every rotation the region admits.
+- **No rest that fits is an empty feasible set**: `[]`, with `exceeds_opening` logged at
+  `DEBUG`. A malformed opening or request (non-finite, `low > high`, below the floor, a
+  negative clearance, both or neither of `size` and `radius`) raises `ValueError`.
+
+This is a claim about the pose at release. It is **not** a claim that the object falls
+straight, or about where or how it comes to rest: a consumer that cares observes the
+landing.
+
+The oracle certifies a release with `_placement_oracle.certify_release`, from the posed
+geometry's support function, and `test_opening_placer.py` also checks completeness: every
+rest of `StablePlacer.place` whose footprint fits the opening must be returned. Its
+mutation gate corrupts the inset (the circle's radius taken as a square's half-extent,
+the clearance or the footprint dropped, everything refused) and the heights (applied to
+the origin rather than the lowest point), and each must fail it.
 
 ### Assurance
 
