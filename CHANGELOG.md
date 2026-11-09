@@ -4,7 +4,13 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [4.4.0] — 2026-11
+
+Objects are released into containers through their openings. `OpeningPlacer` gives one
+region per resting orientation that fits through a rectangular or circular opening, for
+a planner to compose with a grasp as it does a placement (#200). On scanned hulls, one
+physical rest still comes back as many near-coplanar facets, each with its own region and
+an understated margin; #210 merges them.
 
 ### Added
 - **`OpeningPlacer`** (#200) releases an object into a container through its opening: a
