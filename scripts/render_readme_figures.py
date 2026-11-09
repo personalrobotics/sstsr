@@ -11,7 +11,7 @@ keeps each panel tightly framed. The placement figures are single scenes: the wh
 point of those is several objects resting on one table.
 
 Usage:
-    uv run python scripts/render_readme_figures.py             # all three
+    uv run python scripts/render_readme_figures.py             # all four
     uv run python scripts/render_readme_figures.py --only grasps
 """
 
@@ -26,7 +26,7 @@ import numpy as np
 from PIL import Image
 
 from tsr.hands import ParallelJawGripper
-from tsr.placement import StablePlacer
+from tsr.placement import Box, Cylinder, OpeningPlacer, Shape, StablePlacer
 from tsr.viser import add_primitive, gripper_segments, sample_poses, torus_mesh
 
 try:
@@ -428,10 +428,99 @@ def meshes(server, client) -> Image.Image:
     return _capture(client, position=(0.7, -0.85, 0.55), look_at=(0.0, -0.02, 0.06), width=1600, height=1000)
 
 
+# A recycling bin's opening and the clearance a release keeps inside it, as the
+# OpeningPlacer tests use them; the bin is drawn shallower than its 0.757 m, which
+# changes nothing about the regions.
+BIN_SIZE = (0.238, 0.238)
+BIN_DRAWN_DEPTH = 0.26
+BIN_WALL = 0.015
+BIN_CLEARANCE = 0.026
+RELEASE_LOWEST = (0.02, 0.06)
+SLIDE = (110, 220, 140)
+
+
+def _draw_bin(scene, name, centre) -> None:
+    """An open-topped bin, its rim at ``centre``'s height."""
+    (sx, sy), d, w = BIN_SIZE, BIN_DRAWN_DEPTH, BIN_WALL
+    cx, cy, cz = centre
+    color = (58, 64, 76)
+    scene.add_box(
+        f"{name}/floor", dimensions=(sx + 2 * w, sy + 2 * w, w), position=(cx, cy, cz - d - w / 2), color=color
+    )
+    for side, (dims, offset) in {
+        "x-": ((w, sy + 2 * w, d), (-(sx + w) / 2, 0)),
+        "x+": ((w, sy + 2 * w, d), ((sx + w) / 2, 0)),
+        "y-": ((sx, w, d), (0, -(sy + w) / 2)),
+        "y+": ((sx, w, d), (0, (sy + w) / 2)),
+    }.items():
+        scene.add_box(
+            f"{name}/{side}", dimensions=dims, position=(cx + offset[0], cy + offset[1], cz - d / 2), color=color
+        )
+
+
+def drops(server, client) -> Image.Image:
+    """Release regions into a bin: one bin per resting orientation that fits through its
+    opening, the object at the region's centre and faint at its corners, and the region
+    its origin may slide in drawn on the rim."""
+    scene = server.scene
+    scene.reset()
+    placer = OpeningPlacer(size=BIN_SIZE, depth=0.757)
+    objects = (
+        ("cylinder", (0.035, 0.22), Shape([Cylinder(0.035, 0.22)])),  # a bottle: lying, it rolls
+        ("box", (0.06, 0.10, 0.17), Shape([Box((0.06, 0.10, 0.17))])),  # lying flat, too wide
+    )
+    bins = []
+    for kind, dims, shape in objects:
+        templates = placer.place(shape, lowest=RELEASE_LOWEST, clearance=BIN_CLEARANCE, subject=kind)
+        print(f"  {kind}: {len(templates)} release region(s): {[t.variant for t in templates]}", flush=True)
+        bins += [(kind, dims, t) for t in templates]
+
+    spacing = BIN_SIZE[0] + 2 * BIN_WALL + 0.07
+    for i, (kind, dims, template) in enumerate(bins):
+        centre = np.array([(i - (len(bins) - 1) / 2) * spacing, 0.0, 0.0])
+        _draw_bin(scene, f"/bin{i}", centre)
+        T_world_opening = np.eye(4)
+        T_world_opening[:3, 3] = centre
+        region = template.instantiate(T_world_opening)
+        hx, hy = template.Bw[0, 1], template.Bw[1, 1]
+        scene.add_box(
+            f"/bin{i}/slide", dimensions=(2 * hx, 2 * hy, 0.002), position=tuple(centre + (0, 0, 0.001)), color=SLIDE
+        )
+        low, high = template.Bw[2]
+        xyzrpy = np.zeros(6)
+        xyzrpy[2], xyzrpy[5] = (low + high) / 2, 0.5
+        add_faceted(scene, f"/{kind}/{i}", kind, dims, pose=region.to_transform(xyzrpy), centered=True)
+        # The region's extremes, in sliding and in yaw: still inside the opening.
+        for j, (sx, sy, yaw) in enumerate(((-1, -1, -1.2), (1, -1, 2.0), (1, 1, 0.9), (-1, 1, -2.6))):
+            xyzrpy = np.array([sx * hx, sy * hy, low, 0.0, 0.0, yaw])
+            add_primitive(
+                scene,
+                f"/{kind}/{i}_ghost{j}",
+                kind,
+                dims,
+                pose=region.to_transform(xyzrpy),
+                centered=True,
+                color=NEUTRAL,
+                opacity=0.22,
+            )
+
+    # A long row of bins: a narrow field of view from afar keeps the end bins square.
+    width = len(bins) * spacing
+    fov = client.camera.fov
+    client.camera.fov = 0.3
+    try:
+        return _capture(
+            client, position=(0.0, -2.2 * width, 1.0 * width), look_at=(0.0, 0.0, -0.05), width=2400, height=900
+        )
+    finally:
+        client.camera.fov = fov
+
+
 FIGURES = {
     "grasps": (grasps, "tsr_grasps.png"),
     "placements": (placements, "stable_placements.png"),
     "meshes": (meshes, "mesh_placements.png"),
+    "drops": (drops, "drops.png"),
 }
 
 

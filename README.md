@@ -24,6 +24,12 @@ Based on the IJRR paper ["Task Space Regions: A Framework for Pose-Constrained M
 
 *L-shape, T-shape, and a mug (cylinder + handle) — `place_mesh` applied to arbitrary vertex clouds. Each object is shown in all stable orientations above the 5° margin threshold.*
 
+### Releasing into a container
+
+![Releases into a bin's opening](assets/drops.png)
+
+*`OpeningPlacer` over a 0.238 m square bin opening, 26 mm clearance: one region per resting orientation that fits through it. A 0.22 m bottle is released only on an end (lying, it rolls); a box on four of its six faces (lying flat, it is too wide). Each object is shown at its region's centre and, faint, at its corners and other yaws; the green patch is where its origin may slide.*
+
 ## Installation
 
 The distribution is named **`sstsr`** on PyPI; the import name is `tsr`.
