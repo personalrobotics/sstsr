@@ -67,6 +67,13 @@ class ParallelJawGripper(GripperBase):
                        ``None`` (default) if it never does. Requires ``pad_length``.
     """
 
+    #: The cylinder diameters the hand envelops, ``(narrowest, widest)`` in metres, or ``None``
+    #: (default) for a hand that does not (#204). A hand that envelops grips an object with its
+    #: fingers folded around it, past its widest chord, so for these diameters its cylinder
+    #: side grasps also include an ``"enveloping"`` family: the palm a clearance from the near
+    #: surface, the far-face limit (#193) lifted, since the fingers are meant to wrap past it.
+    ENVELOPING_DIAMETERS: Optional[Tuple[float, float]] = None
+
     #: Measured closed reach, ``((width, reach), ...)`` in metres with widths ascending, or
     #: ``None`` for an ideal prismatic jaw. ``width`` is the gap between the pads' contact
     #: faces -- the quantity ``max_aperture`` and a template's span measure -- and ``reach``
@@ -355,6 +362,12 @@ class ParallelJawGripper(GripperBase):
             k=k,
             encompass_diameter=2.0 * cylinder_radius,
         )
+        # An enveloping hand also grasps a cylinder of a diameter it envelops with its palm a
+        # clearance from the near surface, depth L - c, its fingers folding past the axis
+        # (L > r + c) and around the far side: #193's far-face limit does not apply (#204).
+        enveloping = self._enveloping_depth(2.0 * cylinder_radius, clearance)
+        if enveloping is not None:
+            bands = [*bands, ("enveloping", np.array([enveloping]))]
         if not bands:
             return self._empty(
                 "grasp_cylinder_side",
@@ -379,11 +392,29 @@ class ParallelJawGripper(GripperBase):
             )
         return templates
 
+    def _enveloping_depth(self, diameter: float, clearance: float) -> Optional[float]:
+        """The insertion depth of an enveloping grasp of a cylinder ``diameter`` wide: the palm
+        ``clearance`` from its near surface, ``finger_length - clearance``. ``None`` unless the
+        hand declares :attr:`ENVELOPING_DIAMETERS` covering ``diameter``, ``clearance`` is at most
+        the side grasp's default (the range is measured with the palm there; a palm further off
+        is not known to envelop), and the fingertips reach past the cylinder's axis,
+        ``finger_length > diameter / 2 + clearance``."""
+        if self.ENVELOPING_DIAMETERS is None:
+            return None
+        narrowest, widest = self.ENVELOPING_DIAMETERS
+        if not narrowest <= diameter <= widest:
+            return None
+        if clearance > self._default_clearance(min(self.finger_length, diameter / 2)) + 1e-12:
+            return None
+        if self.finger_length <= diameter / 2 + clearance:
+            return None
+        return self.finger_length - clearance
+
     def _cylinder_side_templates(self, cylinder_radius, depths, grip, preshape, name, description, reference, common):
         templates = []
         for i, d in enumerate(depths):
             ro = cylinder_radius + self.finger_length - d
-            dlabel = _depth_label(len(depths), i, grip)
+            dlabel = "enveloping" if grip == "enveloping" else _depth_label(len(depths), i, grip)
             Tw_e_0 = np.array(
                 [
                     [0.0, 0.0, -1.0, ro],
@@ -1982,6 +2013,16 @@ class KinovaJaco2TwoFinger(ParallelJawGripper):
       72.9 mm to 77.8 mm at 56 mm and wider. Six of the tool's 4 mm levels; linear
       interpolation between them is within 0.1 mm of every measured level.
 
+    - ``ENVELOPING_DIAMETERS = (0.032, 0.072)`` — the cylinders the hand envelops (#204).
+      Its fingers wrap what they close on, so its side grasps also include an enveloping
+      family, the palm a clearance from the surface. ``tools/finger_reach.py --envelop
+      --closed 1.35``, on ada_assets ``ada_hand.xml`` (0703586), closes the fingers on a free
+      cylinder of each width, 4 mm apart, posed as that family poses it: from 32 mm to 72 mm,
+      the widest measured, both fingers grip it with their tips past its axis, and narrower
+      ones they miss. From 56 mm the palm also touches it. Measured with the palm at the side
+      grasp's default clearance, the family is emitted only with at most that clearance;
+      and the side grasp's preshape emits no side grasp from about 70 mm.
+
     ``tools/grasp_closure.py`` closes the model's fingers on cylinders posed by this
     hand's own side, top and bottom templates, and checks that both fingers touch the
     cylinder, the palm does not, and the closed fingertips stay inside its far extent.
@@ -2015,6 +2056,9 @@ class KinovaJaco2TwoFinger(ParallelJawGripper):
     # MjSpec put it at ``[PALM_X_IN_LINK_6, 0, -PALM_OFFSET_FROM_LINK_6]``, quat (0, 1, 0, 0).
     PALM_OFFSET_FROM_LINK_6 = 0.125
     PALM_X_IN_LINK_6 = -0.0025
+
+    # The cylinders it envelops, both fingers folded past the axis; see the class docstring.
+    ENVELOPING_DIAMETERS = (0.032, 0.072)
 
     def __init__(self):
         super().__init__(

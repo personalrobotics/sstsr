@@ -39,6 +39,23 @@ finger chains on it; the arm is frozen and kept out of collision. The approach i
 
     uv run --with mujoco==3.14.0 python tools/finger_reach.py <ada_assets>/src/ada_assets/models/jaco2.xml \
         --palm-offset 0.125 --wrap
+
+``--envelop`` measures, for the same hand, which cylinders it envelops (#204): grips against
+the palm, both fingers folded around it. A fixed probe cannot say: the curled fingers loop
+wider than a narrow cylinder held where it was posed, while a free one moves until the
+fingers and the palm meet it. So each width in turn is a free cylinder, gravity off, posed
+broadside as an enveloping side grasp poses it (its axis its radius plus a side grasp's
+default clearance past the palm), and the fingers close to ``--closed``, the command that
+closes the hand (ada_assets declares 1.35 in ``models/mujoco.toml``). A width is enveloped
+when both closed fingers grip it and their tips reach past its axis, folded around its far
+side. Whether the palm housing (``link_6``) also touches it is recorded: on the JACO2 the
+narrower enveloped cylinders are wrapped by the two fingers, the wider ones pressed against
+the palm.
+``ENVELOPING_DIAMETERS`` records the narrowest enveloped width and the aperture. Run it on
+the assembled bare-hand model, whose solver options are the hand's::
+
+    uv run --with mujoco==3.14.0 python tools/finger_reach.py <ada_assets>/src/ada_assets/models/ada_hand.xml \
+        --palm-offset 0.125 --envelop --closed 1.35
 """
 
 from __future__ import annotations
@@ -257,18 +274,105 @@ def measure_wrap(
     return rows
 
 
+def _chain_reach_past(m, d, chain, palm_offset: float) -> float:
+    """How far one finger's collision meshes extend past the palm along the approach, as
+    ``finger_reach_past`` measures both together."""
+    mount = m.body(JACO2_MOUNT).id
+    R, o = d.xmat[mount].reshape(3, 3), d.xpos[mount]
+    bodies = {m.body(b).id for b in chain}
+    deepest = -np.inf
+    for g in range(m.ngeom):
+        if m.geom_bodyid[g] in bodies and m.geom_contype[g] and m.geom_dataid[g] >= 0:
+            mesh = m.geom_dataid[g]
+            v = m.mesh_vert[m.mesh_vertadr[mesh] : m.mesh_vertadr[mesh] + m.mesh_vertnum[mesh]]
+            local = (d.geom_xpos[g] + v @ d.geom_xmat[g].reshape(3, 3).T - o) @ R
+            deepest = max(deepest, float(-local[:, 2].min()))
+    return deepest - palm_offset
+
+
+def measure_envelop(
+    xml: str,
+    palm_offset: float,
+    closed: float,
+    meshdir: str | None = None,
+    clearance_fraction: float = 0.1,
+    step: float = 0.004,
+    settle_steps: int = 3000,
+):
+    """Closed on a free cylinder of each width, posed as an enveloping side grasp poses it;
+    see the module.
+
+    Each row is ``{"width_m", "axis_m", "fingers_touch", "palm_touches", "past_axis_m",
+    "enveloped"}``: the cylinder's axis ``axis_m`` past the palm as posed (its radius plus a
+    side grasp's default clearance, ``clearance_fraction`` of it), what the closed hand
+    touches it with, and how far the shorter-reaching finger's tip reaches past its axis
+    where it ends.
+    """
+    import mujoco
+
+    m0 = wrap_hand_spec(xml, meshdir).compile()
+    palm = wrap_palm(m0, palm_offset)
+    rows = []
+    for width in np.arange(step, 0.074 + step / 2, step):
+        r = float(width) / 2
+        axis = r * (1.0 + clearance_fraction)
+        spec = _probe_spec(xml, meshdir, palm, r, axis)
+        next(b for b in spec.bodies if b.name == "probe").add_freejoint()
+        m = spec.compile()
+        d = mujoco.MjData(m)
+        d.ctrl[:] = closed
+        for _ in range(settle_steps):
+            mujoco.mj_step(m, d)
+        probe = m.geom("probe").id
+        touching = set()
+        for c in d.contact[: d.ncon]:
+            if probe in (c.geom1, c.geom2):
+                touching.add(m.body(m.geom_bodyid[c.geom2 if c.geom1 == probe else c.geom1]).name)
+        both = all(any(b in touching for b in chain) for chain in JACO2_FINGERS)
+        palm_touches = JACO2_MOUNT in touching
+        mount = m.body(JACO2_MOUNT).id
+        R, o = d.xmat[mount].reshape(3, 3), d.xpos[mount]
+        # The cylinder's axis where it ends, along the approach (-z of the mount), past the palm;
+        # and each finger's reach past it, so that both, not either, must fold past it.
+        ended = float(-((d.xpos[m.body("probe").id] - o) @ R)[2]) - palm_offset
+        past = min(_chain_reach_past(m, d, chain, palm_offset) for chain in JACO2_FINGERS) - ended
+        rows.append(
+            {
+                "width_m": round(float(width), 4),
+                "axis_m": round(axis, 5),
+                "fingers_touch": bool(both),
+                "palm_touches": bool(palm_touches),
+                "past_axis_m": round(past, 4),
+                "enveloped": bool(both and past > 0.0),
+            }
+        )
+    return rows
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("xml", help="the hand's MJCF, e.g. mujoco_menagerie robotiq_2f85/2f85.xml")
     parser.add_argument("--palm-offset", type=float, required=True, help="TSR palm past base_mount [m]")
     parser.add_argument("--json", help="write every settled level here")
     parser.add_argument("--wrap", action="store_true", help="an underactuated hand that wraps: the JACO2")
-    parser.add_argument("--meshdir", help="with --wrap: the meshes, if not <xml dir>/assets")
+    parser.add_argument("--envelop", action="store_true", help="which cylinders the JACO2 envelops (#204)")
+    parser.add_argument("--closed", type=float, help="with --envelop: the fingers' closing command")
+    parser.add_argument("--meshdir", help="with --wrap or --envelop: the meshes, if not <xml dir>/assets")
     args = parser.parse_args()
     import mujoco
 
     print(f"mujoco {mujoco.__version__}, {args.xml}")
-    if args.wrap:
+    if args.envelop:
+        if args.closed is None:
+            parser.error("--envelop needs --closed")
+        rows = measure_envelop(args.xml, args.palm_offset, args.closed, args.meshdir)
+        print(" width mm   axis mm   fingers touch   palm touches   past axis mm   enveloped")
+        for r in rows:
+            print(
+                f"{r['width_m'] * 1e3:9.1f} {r['axis_m'] * 1e3:9.1f}   {str(r['fingers_touch']):>13s}"
+                f"   {str(r['palm_touches']):>12s}   {r['past_axis_m'] * 1e3:12.1f}   {r['enveloped']}"
+            )
+    elif args.wrap:
         rows = measure_wrap(args.xml, args.palm_offset, args.meshdir)
         print(" width mm   reach mm     end on   broadside  (at depth mm)")
         for r in rows[1:] + rows[:1]:

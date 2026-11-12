@@ -1,6 +1,7 @@
 {
  "cylinders": [
   {
+   "enveloping": 0,
    "height_m": 0.03,
    "radius_m": 0.005,
    "templates": [
@@ -319,6 +320,7 @@
    ]
   },
   {
+   "enveloping": 0,
    "height_m": 0.1,
    "radius_m": 0.005,
    "templates": [
@@ -637,6 +639,7 @@
    ]
   },
   {
+   "enveloping": 0,
    "height_m": 0.1,
    "radius_m": 0.0125,
    "templates": [
@@ -955,6 +958,7 @@
    ]
   },
   {
+   "enveloping": 2,
    "height_m": 0.03,
    "radius_m": 0.025,
    "templates": [
@@ -1273,6 +1277,7 @@
    ]
   },
   {
+   "enveloping": 2,
    "height_m": 0.1,
    "radius_m": 0.025,
    "templates": [
@@ -1591,6 +1596,7 @@
    ]
   },
   {
+   "enveloping": 2,
    "height_m": 0.1,
    "radius_m": 0.033,
    "templates": [
