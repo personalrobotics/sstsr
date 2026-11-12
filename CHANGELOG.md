@@ -14,11 +14,14 @@ grasps then include an enveloping family (#204).
   a hand envelops. For a cylinder within them, `grasp_cylinder_side` also emits
   `grip="enveloping"` templates: one depth, the palm the side grasp's clearance from the near
   surface, both rolls, the same height band and yaw, with at most the side grasp's default
-  clearance, at which the range is measured. Their `grip` is valid native provenance. #193's far-face limit does not apply to
+  clearance, at which the range is measured, and only where the side grasp's open preshape
+  fits the aperture. Their `grip` is valid native provenance. #193's far-face limit does not apply to
   them; the open fingertips reach past the axis instead.
 - **`KinovaJaco2TwoFinger` declares `(0.032, 0.072)`**, measured by
   `tools/finger_reach.py --envelop`: closed on a free cylinder posed this way, from 32 mm both
-  fingers grip it with their tips past its axis.
+  fingers grip it with their tips past its axis. With the default clearance the side grasp's
+  preshape fits the hand's 73 mm aperture to 69.5 mm, so its enveloping templates are emitted
+  for 32–69.5 mm cylinders.
 - **`tools/grasp_hold.py`** closes the JACO2 on a free cylinder posed by each side template,
   takes its support away and holds, and records how far the close turns and pulls the cylinder
   in the hand. On ADA's 40 mm cylinder the fingertip grasps turn it up to 0.34–0.52 rad and

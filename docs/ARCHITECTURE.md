@@ -225,7 +225,7 @@ preshape `a`, clearance `c`, and **every** pose admitted by a returned template:
      fingertips reach past the axis, `L > r + c`. The range is measured from the hand's
      model by closing it on a free cylinder posed this way (`tools/finger_reach.py
      --envelop`), not derived from the closing line, which cannot represent where a free
-     object meets curling fingers. Only the Kinova JACO2 declares one (32–72 mm), measured with the palm at the side grasp's default clearance, so the family is emitted only with at most that clearance; every
+     object meets curling fingers. Only the Kinova JACO2 declares one (32–72 mm), measured with the palm at the side grasp's default clearance, so the family is emitted only with at most that clearance, and only where the side grasp's preshape fits the aperture: to 69.5 mm on the JACO2 with the default clearance. Every
      other hand emits exactly the templates it did before.
 
 This describes a viable *pre-grasp*. It is **not** a claim of dynamic stability

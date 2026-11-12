@@ -72,6 +72,8 @@ class ParallelJawGripper(GripperBase):
     #: fingers folded around it, past its widest chord, so for these diameters its cylinder
     #: side grasps also include an ``"enveloping"`` family: the palm a clearance from the near
     #: surface, the far-face limit (#193) lifted, since the fingers are meant to wrap past it.
+    #: Only where a side grasp is emitted at all: its open preshape must fit ``max_aperture``,
+    #: so near the widest end the family can be absent.
     ENVELOPING_DIAMETERS: Optional[Tuple[float, float]] = None
 
     #: Measured closed reach, ``((width, reach), ...)`` in metres with widths ascending, or
@@ -2021,7 +2023,8 @@ class KinovaJaco2TwoFinger(ParallelJawGripper):
       the widest measured, both fingers grip it with their tips past its axis, and narrower
       ones they miss. From 56 mm the palm also touches it. Measured with the palm at the side
       grasp's default clearance, the family is emitted only with at most that clearance;
-      and the side grasp's preshape emits no side grasp from about 70 mm.
+      and the side grasp's default preshape, the diameter and a clearance, exceeds the
+      aperture from 69.5 mm, so it emits no side grasp, enveloping or not, from there.
 
     ``tools/grasp_closure.py`` closes the model's fingers on cylinders posed by this
     hand's own side, top and bottom templates, and checks that both fingers touch the
