@@ -56,6 +56,14 @@ class TestKinovaJaco2TwoFinger(unittest.TestCase):
                 self.assertAlmostEqual(axis_distance - r, clearance, places=9)
                 self.assertAlmostEqual(float(approach[2]), 0.0, places=9)  # radial, across the axis
 
+    def test_no_enveloping_grasp_where_the_side_preshape_exceeds_the_aperture(self):
+        # The declared range reaches 72 mm, but a side grasp opens to the diameter and a
+        # clearance; from 69.5 mm that is wider than the hand opens, so nothing is emitted.
+        hand = KinovaJaco2TwoFinger()
+        self.assertTrue([t for t in hand.grasp_cylinder_side(0.069 / 2, 0.12) if t.provenance.grip == "enveloping"])
+        for diameter in (0.070, hand.ENVELOPING_DIAMETERS[1]):
+            self.assertEqual(hand.grasp_cylinder_side(diameter / 2, 0.12), [], diameter)
+
     def test_other_hands_do_not_envelop(self):
         for hand in (Robotiq2F140(), Robotiq2F85(), FrankaHand()):
             grips = {t.provenance.grip for t in hand.grasp_cylinder_side(0.02, 0.12)}
