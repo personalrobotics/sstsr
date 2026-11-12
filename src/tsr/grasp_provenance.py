@@ -32,7 +32,9 @@ a *depth family* (at most the requested ``k``; fewer when the feasible band
 collapses), and ``depth_index`` in ``0..depth_count-1`` orders them shallow to deep.
 ``grip`` is how a hand with distinct gripping surfaces holds the object (#189):
 ``"pad"`` with the contacts on the fingertip pads, ``"encompassing"`` with the object
-deep in the hand and the fingers folding around it; empty for an ideal parallel jaw.
+deep in the hand and the fingers folding around it, ``"enveloping"`` with the palm a
+clearance from the object and the fingers folding past its far side (#204); empty for an
+ideal parallel jaw.
 A depth family is the set of templates **within one factory result** whose non-depth
 provenance fields are identical: ``primitive``, ``mode``, ``approach``,
 ``finger_orientation``, ``symmetry``, ``grip``, and ``metadata`` are held fixed while only

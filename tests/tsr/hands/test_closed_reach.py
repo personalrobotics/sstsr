@@ -12,8 +12,12 @@ The invariant is geometric and checked from the poses alone: for every pose of e
 template, the palm is a clearance outside the near face, and the fingertips are a clearance
 inside the far face both open (``finger_length`` past the palm) and closed on the span
 (``reach(span)`` past the palm). Near face, far face and span are the solid's extent along
-the approach and the closing axis, projected from its own geometry; nothing is read from the
-template's provenance.
+the approach and the closing axis, projected from its own geometry.
+
+An enveloping template (#204) is meant to fold its fingers past the far face, so for it the
+far-face clauses give way to their opposite: the palm is a clearance outside the near face,
+and the open fingertips reach past the solid's middle along the approach, so the fingers can
+fold around it. Its grip is the one thing read from the provenance.
 """
 
 import itertools
@@ -84,11 +88,15 @@ def _violations(hand, extent, dims, templates, clearance):
             near, far = extent(dims, approach)
             lo, hi = extent(dims, closing)
             p = palm @ approach
-            gaps = {
-                "palm outside the near face": near - p,
-                "open fingertips inside the far face": far - (p + hand.finger_length),
-                "closed fingertips inside the far face": far - (p + hand.reach(hi - lo)),
-            }
+            gaps = {"palm outside the near face": near - p}
+            if t.provenance.grip == "enveloping":
+                # Past the middle by any amount: the margin is the palm's alone.
+                past = p + hand.finger_length - (near + far) / 2
+                if past <= tol:
+                    out.append(f"{t.name}: open fingertips short of the middle by {-past * 1e3:.3f} mm")
+            else:
+                gaps["open fingertips inside the far face"] = far - (p + hand.finger_length)
+                gaps["closed fingertips inside the far face"] = far - (p + hand.reach(hi - lo))
             for what, gap in gaps.items():
                 if gap < margin - tol:
                     out.append(f"{t.name}: {what} by {gap * 1e3:.3f} mm < {margin * 1e3:g} mm")

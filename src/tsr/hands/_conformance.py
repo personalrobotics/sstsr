@@ -74,9 +74,11 @@ _NATIVE = {
 }
 
 # How a hand with distinct gripping surfaces holds the object (#189). Any built-in grasp
-# can be held on the pads; only a curved object deep in the hand can be encompassed.
+# can be held on the pads; only a curved object deep in the hand can be encompassed, and
+# only a cylinder side grasp enveloped (#204).
 _GRIPS = {"", "pad"}
 _ENCOMPASSABLE = {("cylinder", "side"), ("sphere", "surface")}
+_ENVELOPABLE = {("cylinder", "side")}
 
 
 def validate_builtin_provenance(p: GraspProvenance) -> None:
@@ -100,7 +102,11 @@ def validate_builtin_provenance(p: GraspProvenance) -> None:
         if value not in allowed:
             raise ValueError(f"{label}={value!r} is not valid for built-in {key}; allowed {sorted(allowed)}")
 
-    allowed_grips = _GRIPS | ({"encompassing"} if key in _ENCOMPASSABLE else set())
+    allowed_grips = (
+        _GRIPS
+        | ({"encompassing"} if key in _ENCOMPASSABLE else set())
+        | ({"enveloping"} if key in _ENVELOPABLE else set())
+    )
     if p.grip not in allowed_grips:
         raise ValueError(f"grip={p.grip!r} is not valid for built-in {key}; allowed {sorted(allowed_grips)}")
 

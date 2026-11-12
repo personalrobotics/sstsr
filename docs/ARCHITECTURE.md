@@ -218,6 +218,15 @@ preshape `a`, clearance `c`, and **every** pose admitted by a returned template:
    half the minimum encompassing diameter), so neither hand encompasses. A real
    encompassing grip presses the object against the linkage, which this model does not
    represent (#204).
+   - `grip="enveloping"` (#204): a cylinder side grasp by a hand that declares the
+     diameters it envelops, `ENVELOPING_DIAMETERS`, for a cylinder within them. One depth,
+     `d = L − c`: the palm `c` outside the near surface. The fingers are meant to fold
+     past the far surface, so #193's far-face limit does not apply to it; instead the open
+     fingertips reach past the axis, `L > r + c`. The range is measured from the hand's
+     model by closing it on a free cylinder posed this way (`tools/finger_reach.py
+     --envelop`), not derived from the closing line, which cannot represent where a free
+     object meets curling fingers. Only the Kinova JACO2 declares one (32–72 mm), measured with the palm at the side grasp's default clearance, so the family is emitted only with at most that clearance; every
+     other hand emits exactly the templates it did before.
 
 This describes a viable *pre-grasp*. It is **not** a claim of dynamic stability
 or force closure under arbitrary friction — an explicit non-goal.
@@ -305,7 +314,7 @@ grasp DSL:
    | `finger_orientation` | object | direction the pads are separated along — object axis (box) or yaw-free family `tangential`/`diameter` (fingers always close along `±y_EE`) |
    | `depth_index`/`depth_count` | — | index (shallow → deep) and number of **distinct** depth levels in the template's *depth family* (`≤ k`; a one-point band gives `depth_count = 1`, an empty band emits nothing) (#81). A depth family is the templates **within one factory result** whose non-depth fields — `primitive`, `mode`, `approach`, `finger_orientation`, `symmetry`, `grip`, `metadata` — are identical; it holds one template per depth level. The counters do not identify templates across independently generated or concatenated collections. |
    | `symmetry` | — | distinguishes otherwise-equivalent templates (e.g. a roll flip) |
-   | `grip` | — | how a hand with gripping surfaces holds the object: `pad` or `encompassing` (clause 9); empty for an ideal jaw, and omitted from the serialized record then (#189) |
+   | `grip` | — | how a hand with gripping surfaces holds the object: `pad`, `encompassing` or `enveloping` (clause 9); empty for an ideal jaw, and omitted from the serialized record then (#189) |
    | `metadata` | object | descriptive extras only — **never** geometric evidence (torus `minor_*`, box `slide_axis`/`span`) |
 
 2. **Native conformance** (`tsr.hands._conformance.validate_builtin_provenance`)

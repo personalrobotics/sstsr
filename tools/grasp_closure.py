@@ -17,7 +17,10 @@ close to the end of their range. A pose passes when:
 * closed, the fingertips are still inside the cylinder's far extent along the approach,
   which is what ``CLOSED_REACH`` promises (#193).
 
-A cylinder wider than the aperture must get no templates at all. The report is written
+A cylinder wider than the aperture must get no templates at all. Enveloping templates (#204) are
+not closed on here: a fixed cylinder cannot say whether the fingers find a free one, and the
+fingers are meant to fold past the far extent. ``tools/finger_reach.py --envelop`` and
+``tools/grasp_hold.py`` close on a free one; the report counts them under ``enveloping``. The report is written
 sorted and rounded to 0.1 mm, so two runs give the same bytes::
 
     uv run --with mujoco==3.14.0 python tools/grasp_closure.py \\
@@ -124,8 +127,11 @@ def run(xml: str, meshdir: str | None = None) -> dict:
     hand = KinovaJaco2TwoFinger()
     report = {"hand": type(hand).__name__, "cylinders": [], "too_wide": []}
     for r, h in CYLINDERS:
-        entry = {"radius_m": r, "height_m": h, "templates": []}
+        entry = {"radius_m": r, "height_m": h, "templates": [], "enveloping": 0}
         for t in hand.grasp_cylinder(r, h):
+            if t.provenance.grip == "enveloping":
+                entry["enveloping"] += 1
+                continue
             for label, T in _poses(t):
                 res = close_on(xml, meshdir, hand, T, r, h)
                 entry["templates"].append({"template": t.name, "pose": label, **res})

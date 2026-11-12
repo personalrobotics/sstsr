@@ -4,6 +4,33 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+A hand that wraps what it closes on can declare the cylinders it envelops, and its side
+grasps then include an enveloping family (#204).
+
+### Added
+- **`ParallelJawGripper.ENVELOPING_DIAMETERS`**, `None` by default: the cylinder diameters
+  a hand envelops. For a cylinder within them, `grasp_cylinder_side` also emits
+  `grip="enveloping"` templates: one depth, the palm the side grasp's clearance from the near
+  surface, both rolls, the same height band and yaw, with at most the side grasp's default
+  clearance, at which the range is measured. Their `grip` is valid native provenance. #193's far-face limit does not apply to
+  them; the open fingertips reach past the axis instead.
+- **`KinovaJaco2TwoFinger` declares `(0.032, 0.072)`**, measured by
+  `tools/finger_reach.py --envelop`: closed on a free cylinder posed this way, from 32 mm both
+  fingers grip it with their tips past its axis.
+- **`tools/grasp_hold.py`** closes the JACO2 on a free cylinder posed by each side template,
+  takes its support away and holds, and records how far the close turns and pulls the cylinder
+  in the hand. On ADA's 40 mm cylinder the fingertip grasps turn it up to 0.34–0.52 rad and
+  the enveloping grasp 0.04 rad.
+
+### Changed
+- `tools/grasp_closure.py` leaves enveloping templates to the free-object tools, and counts
+  them. Its other results are unchanged.
+
+Every other hand, the Robotiq 2F-85 and 2F-140 and the Franka hand, emits exactly the
+templates it did before.
+
 ## [4.4.0] — 2026-11
 
 Objects are released into containers through their openings. `OpeningPlacer` gives one
